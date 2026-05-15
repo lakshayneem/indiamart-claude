@@ -26,10 +26,19 @@ def main():
 
     result = run_skill("hello-world", {"name": "Lakshay"})
 
+    safe = result["output"][:500].encode("ascii", errors="replace").decode()
     print(f"  output ({len(result['output'])} chars):")
-    print("  " + result["output"][:500].replace("\n", "\n  "))
+    print("  " + safe.replace("\n", "\n  "))
     print(f"\n  execution_time: {result['execution_time']:.1f}s")
     print(f"  cost_usd: ${result['cost_usd']:.6f}")
+
+    files = result.get("output_files", {})
+    if files:
+        print(f"\n  output_files ({len(files)}):")
+        for name, content in files.items():
+            print(f"    [{name}] {len(content)} chars — {content[:80].strip()!r}")
+    else:
+        print("\n  output_files: (none)")
 
     assert result["output"], "Expected non-empty output"
     print("\nPhase 4 PASSED — skill runner works.")

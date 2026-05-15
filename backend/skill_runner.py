@@ -43,10 +43,43 @@ def _parse_cost(raw: str) -> float:
     return 0.0
 
 
+def _download_outputs(sandbox) -> dict[str, bytes]:
+    """Download all files from /home/daytona/output/ before sandbox is deleted."""
+    try:
+        files = sandbox.fs.list_files("/home/daytona/output")
+    except Exception:
+        return {}
+
+    result = {}
+    for f in files:
+        if f.is_dir:
+            continue
+        try:
+            content = sandbox.fs.download_file(f"/home/daytona/output/{f.name}")
+            if content:
+                result[f.name] = content
+        except Exception:
+            pass
+    return result
+
+
+def _pick_main_output(output_files: dict[str, bytes], fallback: str) -> str:
+    """
+    Return the best text output for the frontend.
+    Prefers the first .md file (report.md, review.md, etc.) over assistant narration.
+    Falls back to stream-json assistant text if no .md found.
+    """
+    md_files = {k: v for k, v in output_files.items()
+                if k.endswith(".md") and k != "run.log"}
+    if md_files:
+        return next(iter(md_files.values())).decode(errors="replace")
+    return fallback
+
+
 def run_skill(skill_id: str, inputs: dict) -> dict:
     """
-    Stateless skill runner: create sandbox → inject CLAUDE.md → run claude -p → delete sandbox.
-    Returns {output, execution_time, cost_usd}.
+    Stateless skill runner: create sandbox → inject CLAUDE.md → run claude -p → download outputs → delete sandbox.
+    Returns {output, output_files, execution_time, cost_usd}.
     """
     skill_md = load_skill_md(skill_id)
     task = _format_task(inputs)
@@ -88,8 +121,16 @@ def run_skill(skill_id: str, inputs: dict) -> dict:
         elapsed = time.time() - start
         raw = "".join(chunks)
 
+        output_files = _download_outputs(sandbox)
+        main_output = _pick_main_output(output_files, fallback=_parse_output(raw))
+
         return {
-            "output": _parse_output(raw),
+            "output": main_output,
+            "output_files": {
+                k: v.decode(errors="replace")
+                for k, v in output_files.items()
+                if not k.endswith((".png", ".jpg", ".jpeg", ".gif", ".pdf"))
+            },
             "execution_time": elapsed,
             "cost_usd": _parse_cost(raw),
         }
