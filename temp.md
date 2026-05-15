@@ -1,3 +1,29 @@
+# Multi-Turn Session & Chat — Future Implementation Reference
+
+> Removed in Phase 4 in favor of stateless single-shot skill runs.
+> Restore this when you need persistent chat sessions across turns.
+
+---
+
+## Architecture
+
+```
+Chat UI
+  └─ POST /chat/start     → creates sandbox, injects CLAUDE.md
+  └─ POST /chat/message   → sends message, streams response (--resume <session_id>)
+  └─ POST /chat/end       → deletes sandbox
+```
+
+Three layers of state persist across turns:
+1. **Backend in-memory** (`SessionStore._sessions`): `chat_id → SkillSession`
+2. **Sandbox filesystem**: files Claude wrote in turn 1 are there in turn 2
+3. **Claude Code history**: `~/.claude/projects/<path>/session.jsonl` inside sandbox
+
+---
+
+## `backend/session.py` — Full Implementation
+
+```python
 """
 Session manager — SkillSession + SessionStore.
 
@@ -125,3 +151,55 @@ class SessionStore:
         session = self._sessions.pop(chat_id, None)
         if session:
             session.delete()
+```
+
+---
+
+## API endpoints for chat (`backend/api.py` additions)
+
+```python
+@app.post("/chat/start")
+async def start_chat(payload: dict):
+    skill = match_skill(payload["first_message"])
+    session = await store.create(payload["chat_id"], skill)
+    return {"sandbox_ready": True, "skill": skill}
+
+@app.post("/chat/message")
+async def chat_message(payload: dict):
+    session = store.get(payload["chat_id"])
+    if not session:
+        skill = match_skill(payload["message"])
+        session = await store.create(payload["chat_id"], skill)
+
+    queue = asyncio.Queue()
+
+    async def run():
+        await session.send(payload["message"], lambda c: asyncio.create_task(queue.put(c)))
+        await queue.put(None)
+
+    asyncio.create_task(run())
+
+    async def stream():
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+@app.post("/chat/end")
+async def end_chat(payload: dict):
+    await store.destroy(payload["chat_id"])
+    return {"deleted": True}
+```
+
+---
+
+## Key design decisions
+
+- **`--resume <session_id>`** over `--continue`: captures session_id from the `result` event on turn 0, uses it from turn 1+. More reliable than `--continue` when sandbox has multiple projects.
+- **Sandbox lives across all turns**: only the `claude` process restarts. Filesystem state persists (files, outputs from prior turns).
+- **`auto_stop_interval=30`**: sandbox auto-kills after 30 min idle — prevents resource leaks if `/chat/end` is never called.
+- **In-memory `SessionStore`**: fine for single-process. For multi-process/worker deployment, replace with Redis: `chat_id → {sandbox_id, turn, session_id}`.
+- **Out-of-scope detection**: add a pre-check in `/chat/message` that compares message embedding to skill description (cosine similarity < 0.35 → reject before creating sandbox). See CLAUDE.md section "Handling irrelevant messages".
