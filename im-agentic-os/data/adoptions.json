@@ -1,0 +1,114 @@
+[
+  {
+    "run_id": "r001",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 12.4,
+    "ran_at": "2026-05-06T10:15:00"
+  },
+  {
+    "run_id": "r002",
+    "skill_id": "srs-creator",
+    "username": "im_admin",
+    "status": "success",
+    "execution_time": 14.1,
+    "ran_at": "2026-05-07T11:00:00"
+  },
+  {
+    "run_id": "r003",
+    "skill_id": "test-case-generator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 9.8,
+    "ran_at": "2026-05-08T09:30:00"
+  },
+  {
+    "run_id": "r004",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 13.2,
+    "ran_at": "2026-05-09T14:00:00"
+  },
+  {
+    "run_id": "r005",
+    "skill_id": "srs-creator",
+    "username": "im_admin",
+    "status": "success",
+    "execution_time": 11.5,
+    "ran_at": "2026-05-10T10:45:00"
+  },
+  {
+    "run_id": "r006",
+    "skill_id": "test-case-generator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 8.9,
+    "ran_at": "2026-05-11T15:30:00"
+  },
+  {
+    "run_id": "r007",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 15.0,
+    "ran_at": "2026-05-12T11:00:00"
+  },
+  {
+    "run_id": "r008",
+    "skill_id": "test-case-generator",
+    "username": "im_admin",
+    "status": "success",
+    "execution_time": 10.2,
+    "ran_at": "2026-05-13T09:00:00"
+  },
+  {
+    "run_id": "r009",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 12.8,
+    "ran_at": "2026-05-14T14:30:00"
+  },
+  {
+    "run_id": "r010",
+    "skill_id": "srs-creator",
+    "username": "im_admin",
+    "status": "success",
+    "execution_time": 13.7,
+    "ran_at": "2026-05-15T08:00:00"
+  },
+  {
+    "run_id": "afbde16f",
+    "skill_id": "test-case-generator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 17.2,
+    "ran_at": "2026-05-15T16:37:28.827782"
+  },
+  {
+    "run_id": "f5c59ece",
+    "skill_id": "test",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 11.0,
+    "ran_at": "2026-05-15T17:06:31.994553"
+  },
+  {
+    "run_id": "f1a0fabe",
+    "skill_id": "test-case-generator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 9.0,
+    "ran_at": "2026-05-15T17:16:10.306659"
+  },
+  {
+    "run_id": "8374334f",
+    "skill_id": "skill-test",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 34.0809063911438,
+    "ran_at": "2026-05-15T22:37:25.681479"
+  }
+]

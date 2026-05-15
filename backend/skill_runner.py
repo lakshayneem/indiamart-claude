@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import time
@@ -78,13 +79,19 @@ def _pick_main_output(output_files: dict[str, bytes], fallback: str) -> str:
     return fallback
 
 
-def run_skill(skill_id: str, inputs: dict) -> dict:
+def run_skill(
+    skill_id: str,
+    inputs: dict,
+    files: dict[str, bytes] | None = None,
+) -> dict:
     """
-    Stateless skill runner: create sandbox → inject CLAUDE.md → run claude -p → download outputs → delete sandbox.
+    Stateless skill runner: create sandbox → inject CLAUDE.md/SKILL.md → upload user files →
+    run claude -p → download outputs → delete sandbox.
     Returns {output, output_files, execution_time, cost_usd}.
     """
     skill_md = load_skill_md(skill_id)
     task = _format_task(inputs)
+    files = files or {}
 
     daytona = Daytona(_config)
     sandbox = daytona.create(
@@ -105,9 +112,24 @@ def run_skill(skill_id: str, inputs: dict) -> dict:
 
         sandbox.fs.upload_file(skill_md, "/home/daytona/workspace/SKILL.md")
 
+        uploaded_names: list[str] = []
+        for filename, content in files.items():
+            safe_name = Path(filename).name  # strip directories
+            if not safe_name:
+                continue
+            sandbox.fs.upload_file(content, f"/home/daytona/workspace/{safe_name}")
+            uploaded_names.append(safe_name)
+
+        files_note = ""
+        if uploaded_names:
+            files_note = (
+                "\n\nUploaded files (in /home/daytona/workspace/):\n"
+                + "\n".join(f"  - {n}" for n in uploaded_names)
+            )
+
         prompt = (
             "Read /home/daytona/workspace/SKILL.md and execute the task described there.\n\n"
-            f"Inputs:\n{task}"
+            f"Inputs:\n{task}{files_note}"
         )
         safe_prompt = prompt.replace("'", "'\\''")
 
@@ -135,13 +157,18 @@ def run_skill(skill_id: str, inputs: dict) -> dict:
         output_files = _download_outputs(sandbox)
         main_output = _pick_main_output(output_files, fallback=_parse_output(raw))
 
+        text_files: dict[str, str] = {}
+        binary_files: dict[str, str] = {}
+        for fname, content in output_files.items():
+            try:
+                text_files[fname] = content.decode("utf-8")
+            except (UnicodeDecodeError, ValueError):
+                binary_files[fname] = base64.b64encode(content).decode()
+
         return {
             "output": main_output,
-            "output_files": {
-                k: v.decode(errors="replace")
-                for k, v in output_files.items()
-                if not k.endswith((".png", ".jpg", ".jpeg", ".gif", ".pdf"))
-            },
+            "output_files": text_files,
+            "output_files_binary": binary_files,
             "execution_time": elapsed,
             "cost_usd": _parse_cost(raw),
         }

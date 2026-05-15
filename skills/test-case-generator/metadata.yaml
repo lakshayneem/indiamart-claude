@@ -1,0 +1,26 @@
+skill_id: test-case-generator
+name: Test Case Generator
+description: "Use this skill when you need to generate structured test cases from an SRS document or feature description."
+team: QA Team
+category: Test Cases
+tags: [testing, qa, test-cases, srs]
+version: 1
+status: approved
+is_featured: false
+creator_id: im_creator
+created_at: "2026-05-10T09:00:00"
+approved_at: "2026-05-11T11:00:00"
+owner: qa-team
+
+input_fields:
+  - key: srs_document
+    label: SRS Document
+    type: textarea
+    required: true
+    placeholder: "Paste your SRS document or feature description here..."
+
+adoption_projection:
+  x_mins: 3
+  y_occurrences_per_day: 5
+  n_adopters: 150
+  hours_saved_per_month: 37

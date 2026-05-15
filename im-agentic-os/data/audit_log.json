@@ -1,0 +1,90 @@
+[
+  {
+    "log_id": "log001",
+    "actor": "im_admin",
+    "action": "skill_approved",
+    "target": "srs-creator",
+    "details": "Approved skill: SRS Creator submitted by im_creator",
+    "created_at": "2026-05-09T14:30:00"
+  },
+  {
+    "log_id": "log002",
+    "actor": "im_admin",
+    "action": "skill_approved",
+    "target": "test-case-generator",
+    "details": "Approved skill: Test Case Generator submitted by im_creator",
+    "created_at": "2026-05-11T11:00:00"
+  },
+  {
+    "log_id": "log003",
+    "actor": "im_admin",
+    "action": "role_changed",
+    "target": "im_creator",
+    "details": "Role changed from user to creator",
+    "created_at": "2026-05-05T10:00:00"
+  },
+  {
+    "log_id": "log004",
+    "actor": "im_admin",
+    "action": "announcement_posted",
+    "target": "ann001",
+    "details": "Posted announcement: Welcome to IM Agentic OS!",
+    "created_at": "2026-05-08T09:00:00"
+  },
+  {
+    "log_id": "log005",
+    "actor": "im_admin",
+    "action": "rate_limit_changed",
+    "target": "user",
+    "details": "Updated rate limit for user role: max_runs_per_day set to 20",
+    "created_at": "2026-05-07T16:00:00"
+  },
+  {
+    "log_id": "log256b6b",
+    "actor": "im_creator",
+    "action": "skill_submitted",
+    "target": "test",
+    "details": "Submitted skill: test",
+    "created_at": "2026-05-15T17:04:50.723232"
+  },
+  {
+    "log_id": "logd41d31",
+    "actor": "im_admin",
+    "action": "skill_approved",
+    "target": "test",
+    "details": "Approved skill: test",
+    "created_at": "2026-05-15T17:05:37.218940"
+  },
+  {
+    "log_id": "log0fb997",
+    "actor": "im_creator",
+    "action": "skill_submitted",
+    "target": "skill-test",
+    "details": "Submitted skill: Skill test",
+    "created_at": "2026-05-15T17:13:13.988851"
+  },
+  {
+    "log_id": "log3a1953",
+    "actor": "im_admin",
+    "action": "skill_approved",
+    "target": "skill-test",
+    "details": "Approved skill: Skill test",
+    "created_at": "2026-05-15T17:13:43.821498"
+  },
+  {
+    "log_id": "log1b92e5",
+    "actor": "im_creator",
+    "action": "skill_submitted",
+    "target": "para-writer",
+    "details": "Submitted skill: para writer",
+    "created_at": "2026-05-16T00:46:24.424032"
+  },
+  {
+    "log_id": "log912272",
+    "actor": "im_admin",
+    "action": "skill_approved",
+    "target": "para-writer",
+    "details": "Approved skill: para writer",
+    "created_at": "2026-05-16T00:47:46.898012"
+  }
+]

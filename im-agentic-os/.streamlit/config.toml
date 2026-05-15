@@ -1,0 +1,41 @@
+[theme]
+base = "light"
+
+# Brand colours — IndiaMART Design System
+primaryColor          = "#2e3192"
+backgroundColor       = "#ffffff"
+secondaryBackgroundColor = "#f1f5fb"
+textColor             = "#0f172a"
+linkColor             = "#2e3192"
+borderColor           = "#e2e8f0"
+
+# Shape
+baseRadius   = "medium"
+buttonRadius = "medium"
+showWidgetBorder = true
+showSidebarBorder = true
+
+# Typography — Inter via Google Fonts
+font     = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+baseFontSize   = 14
+baseFontWeight = 400
+headingFontSizes   = ["28px", "22px", "18px", "16px", "14px", "12px"]
+headingFontWeights = [700, 600, 600, 600, 500, 500]
+linkUnderline = false
+
+# Semantic palette
+greenColor  = "#059669"
+redColor    = "#dc2626"
+orangeColor = "#d97706"
+blueColor   = "#2483d4"
+violetColor = "#7c3aed"
+
+# Charts — indigo + teal brand colours
+chartCategoricalColors = ["#2e3192", "#02a699", "#d97706", "#dc2626", "#7c3aed", "#059669", "#64748b"]
+
+[theme.sidebar]
+backgroundColor          = "#ffffff"
+secondaryBackgroundColor = "#f1f5fb"
+borderColor              = "#e2e8f0"
+primaryColor             = "#2e3192"
