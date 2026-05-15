@@ -1,0 +1,6 @@
+name: data-report
+display_name: "Data Report Generator"
+description: "Generates formatted reports and charts from raw data files (CSV, Excel, JSON)"
+tags: [analytics, reporting, data]
+version: "1.0"
+owner: analytics-team

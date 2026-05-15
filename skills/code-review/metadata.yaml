@@ -1,0 +1,6 @@
+name: code-review
+display_name: "Code Review"
+description: "Reviews code for bugs, style issues, and improvement opportunities"
+tags: [engineering, review, quality]
+version: "1.0"
+owner: engineering-team

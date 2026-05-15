@@ -1,0 +1,6 @@
+name: hello-world
+display_name: "Hello World"
+description: "Simple greeting skill — writes a welcome message to output/greeting.txt"
+tags: [demo, test]
+version: "1.0"
+owner: platform-team

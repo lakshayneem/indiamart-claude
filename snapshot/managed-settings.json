@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+    "deny": []
+  },
+  "autoUpdaterStatus": "disabled",
+  "env": {
+    "DISABLE_AUTOUPDATER": "1"
+  }
+}
