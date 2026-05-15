@@ -1,0 +1,34 @@
+skill_id: test
+name: test
+description: "Use this skill when ssds"
+team: Catalog Team
+category: Listing Quality
+tags: [test]
+version: 1
+status: approved
+is_featured: false
+creator_id: im_creator
+created_at: "2026-05-15T17:04:50.717414"
+approved_at: "2026-05-15T17:05:37.214931"
+owner: catalog-team
+source_type: repo
+source_ref: test
+
+input_fields:
+  - key: input_1
+    label: Input 1
+    type: dropdown
+    required: true
+    placeholder: "asdsa"
+    options: ["asdasdas", "asdasd3214123"]
+  - key: input_2
+    label: Input 2
+    type: text
+    required: true
+    placeholder: "enter"
+
+adoption_projection:
+  x_mins: 4
+  y_occurrences_per_day: 3
+  n_adopters: 50
+  hours_saved_per_month: 220.0

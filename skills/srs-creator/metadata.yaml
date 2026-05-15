@@ -1,0 +1,36 @@
+skill_id: srs-creator
+name: SRS Creator
+description: "Use this skill when you need to generate a Software Requirements Specification from a GitHub repository, API name, and business requirement text."
+team: Product Team
+category: SRS & Docs
+tags: [srs, documentation, api, requirements]
+version: 1
+status: approved
+is_featured: true
+creator_id: im_creator
+created_at: "2026-05-08T10:00:00"
+approved_at: "2026-05-09T14:30:00"
+owner: product-team
+
+input_fields:
+  - key: repo_url
+    label: GitHub Repo URL
+    type: text
+    required: true
+    placeholder: "https://github.com/org/repo"
+  - key: api_name
+    label: API Name
+    type: text
+    required: true
+    placeholder: "e.g. Product Search API"
+  - key: business_requirement
+    label: Business Requirement
+    type: textarea
+    required: true
+    placeholder: "Describe the business problem or feature you need documented..."
+
+adoption_projection:
+  x_mins: 4
+  y_occurrences_per_day: 3
+  n_adopters: 200
+  hours_saved_per_month: 40

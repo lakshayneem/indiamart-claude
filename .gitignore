@@ -24,6 +24,9 @@ daytona/
 .DS_Store
 Thumbs.db
 
+# Claude Code internal state
+.claude/
+
 # IDE
 .vscode/
 .idea/

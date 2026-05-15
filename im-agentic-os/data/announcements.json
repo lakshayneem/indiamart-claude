@@ -1,0 +1,14 @@
+[
+  {
+    "announcement_id": "ann001",
+    "title": "Welcome to IM Agentic OS!",
+    "message": "Browse skills built for your team and start saving time today. New skills are added every week — check back often!",
+    "audience": "all",
+    "team": null,
+    "type": "info",
+    "created_by": "im_admin",
+    "created_at": "2026-05-08T09:00:00",
+    "expires_at": null,
+    "is_active": true
+  }
+]
