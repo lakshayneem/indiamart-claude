@@ -37,6 +37,7 @@ async def run_skill_endpoint(payload: RunSkillRequest):
             "status": "success",
             "skill_id": payload.skill_id,
             "output": result["output"],
+            "output_files": result["output_files"],
             "execution_time_seconds": result["execution_time"],
             "source": "live",
         }
