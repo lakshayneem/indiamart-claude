@@ -25,7 +25,7 @@ RUN mkdir -p /home/daytona/skills \
 
 RUN pip3 install pandas matplotlib requests openpyxl --break-system-packages
 
-RUN touch /home/daytona/CLAUDE.md
+COPY CLAUDE.md /home/daytona/CLAUDE.md
 
 RUN chown -R daytona:daytona /home/daytona
 

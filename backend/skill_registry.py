@@ -11,8 +11,8 @@ class SkillNotFoundError(Exception):
 
 
 def load_skill_md(skill_name: str) -> bytes:
-    """Return CLAUDE.md bytes for the named skill."""
-    path = SKILLS_DIR / skill_name / "CLAUDE.md"
+    """Return SKILL.md bytes for the named skill."""
+    path = SKILLS_DIR / skill_name / "SKILL.md"
     if not path.exists():
         raise SkillNotFoundError(f"Skill '{skill_name}' not found at {path}")
     return path.read_bytes()
@@ -42,4 +42,4 @@ def list_skills() -> list[dict]:
 
 
 def skill_exists(skill_name: str) -> bool:
-    return (SKILLS_DIR / skill_name / "CLAUDE.md").exists()
+    return (SKILLS_DIR / skill_name / "SKILL.md").exists()
