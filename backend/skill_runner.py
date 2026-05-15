@@ -1,12 +1,14 @@
 import json
 import os
 import time
+from pathlib import Path
 
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 
 from .skill_registry import load_skill_md
 
 SNAPSHOT = os.environ.get("SNAPSHOT_NAME", "company-claude-v1")
+GLOBAL_CLAUDE_MD = Path(__file__).parent.parent / "snapshot" / "CLAUDE.md"
 
 _config = DaytonaConfig(
     api_key=os.environ["DAYTONA_API_KEY"],
@@ -83,7 +85,6 @@ def run_skill(skill_id: str, inputs: dict) -> dict:
     """
     skill_md = load_skill_md(skill_id)
     task = _format_task(inputs)
-    safe_task = task.replace("'", "'\\''")
 
     daytona = Daytona(_config)
     sandbox = daytona.create(
@@ -98,12 +99,22 @@ def run_skill(skill_id: str, inputs: dict) -> dict:
     )
 
     try:
-        sandbox.fs.upload_file(skill_md, "/home/daytona/CLAUDE.md")
+        # Upload global CLAUDE.md (until next snapshot rebuild bakes it in)
+        if GLOBAL_CLAUDE_MD.exists():
+            sandbox.fs.upload_file(GLOBAL_CLAUDE_MD.read_bytes(), "/home/daytona/CLAUDE.md")
+
+        sandbox.fs.upload_file(skill_md, "/home/daytona/workspace/SKILL.md")
+
+        prompt = (
+            "Read /home/daytona/workspace/SKILL.md and execute the task described there.\n\n"
+            f"Inputs:\n{task}"
+        )
+        safe_prompt = prompt.replace("'", "'\\''")
 
         model = os.environ.get("CLAUDE_MODEL", "")
         model_flag = f"--model {model}" if model else ""
         cmd = (
-            f"claude -p '{safe_task}' "
+            f"claude -p '{safe_prompt}' "
             f"{model_flag} "
             f"--output-format stream-json "
             f"--dangerously-skip-permissions "

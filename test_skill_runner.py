@@ -36,7 +36,8 @@ def main():
     if files:
         print(f"\n  output_files ({len(files)}):")
         for name, content in files.items():
-            print(f"    [{name}] {len(content)} chars — {content[:80].strip()!r}")
+            preview = content[:80].strip().encode("ascii", errors="replace").decode()
+            print(f"    [{name}] {len(content)} chars - {preview!r}")
     else:
         print("\n  output_files: (none)")
 
