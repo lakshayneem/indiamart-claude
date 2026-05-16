@@ -118,5 +118,37 @@
     "target": "srs-creator",
     "details": "Approved skill: SRS Creator",
     "created_at": "2026-05-16T14:37:42.967452"
+  },
+  {
+    "log_id": "log71d0e3",
+    "actor": "im_admin",
+    "action": "skill_deleted",
+    "target": "hello-world",
+    "details": "Deleted skill: Hello World",
+    "created_at": "2026-05-16T17:37:40.218371"
+  },
+  {
+    "log_id": "log1e57d5",
+    "actor": "im_admin",
+    "action": "skill_deleted",
+    "target": "para-writer",
+    "details": "Deleted skill: para writer",
+    "created_at": "2026-05-16T17:37:49.644140"
+  },
+  {
+    "log_id": "logaee49b",
+    "actor": "im_admin",
+    "action": "skill_deleted",
+    "target": "skill-test",
+    "details": "Deleted skill: Skill test",
+    "created_at": "2026-05-16T17:38:00.399051"
+  },
+  {
+    "log_id": "logdcb159",
+    "actor": "im_admin",
+    "action": "skill_deleted",
+    "target": "test",
+    "details": "Deleted skill: test",
+    "created_at": "2026-05-16T17:38:13.819663"
   }
 ]

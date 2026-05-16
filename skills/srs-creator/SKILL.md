@@ -16,7 +16,7 @@ Generates an IndiaMART-format Software Requirements Specification document from 
 
 ## Reference
 
-The full SRS structure — all 7 sections, every field rule, every validation pattern, every common mistake — is in [`references/srs-template.md`](references/srs-template.md). **Read it before drafting.** Don't keep its content in the prompt; load it on demand.
+The full SRS structure — all 7 sections, every field rule, every validation pattern, every common mistake — is in `/home/daytona/skills/srs-creator/references/srs-template.md`. **Read it before drafting.** Don't keep its content in the prompt; load it on demand.
 
 ## Workflow
 
@@ -25,7 +25,7 @@ Workflow Progress:
 - [ ] Step 1: Orient in the pre-fetched repo
 - [ ] Step 2: Identify the Go entry points (controller, service, repository, router)
 - [ ] Step 3: Verify every fact from source — never invent
-- [ ] Step 4: Draft srs.md following references/srs-template.md
+- [ ] Step 4: Draft srs.md following /home/daytona/skills/srs-creator/references/srs-template.md
 - [ ] Step 5: Convert to srs.docx via scripts/md_to_docx.py
 - [ ] Step 6: Verify both files exist and confirm in run.log
 ```
@@ -57,13 +57,13 @@ Use `Grep` for things like `STATUS.*FAILED`, `MESSAGE`, `RESPONSE_DATA`, `INSERT
 
 ### Step 3 — Verify every fact
 
-Hard rule from [`references/srs-template.md`](references/srs-template.md): **never invent fields, error messages, status codes, or behaviors. Everything must be traced to a specific line in the Go source.**
+Hard rule from `/home/daytona/skills/srs-creator/references/srs-template.md`: **never invent fields, error messages, status codes, or behaviors. Everything must be traced to a specific line in the Go source.**
 
 If the code says `"PARAM IS MANDATORY"`, the SRS says `"PARAM IS MANDATORY"` — same case, same punctuation. If the table column is `pc_rule_id` not `rule_id`, the SRS uses `pc_rule_id`. If you can't find a value in the code, leave it as `_TBD_` — don't guess.
 
 ### Step 4 — Draft `output/srs.md`
 
-Read [`references/srs-template.md`](references/srs-template.md) and follow it section by section. The 7 sections are fixed; every one must be present even if some rows are minimal.
+Read `/home/daytona/skills/srs-creator/references/srs-template.md` and follow it section by section. The 7 sections are fixed; every one must be present even if some rows are minimal.
 
 Write to `/home/daytona/output/srs.md`. Append progress to `/home/daytona/output/run.log`.
 
@@ -90,7 +90,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/md_to_docx.py \
 The script:
 
 1. Pandoc-converts the SRS markdown body.
-2. Stamps the IndiaMART cover page from `assets/template.docx` with the api name (uppercased).
+2. Stamps the IndiaMART cover page from `assets/srs-template.docx` with the api name (uppercased).
 3. Inserts a page break so the SRS body begins on page 2.
 4. Merges everything into the final `.docx`.
 
@@ -128,7 +128,7 @@ Both files must exist and be non-empty. End with a one-line confirmation in stdo
 
 ## Pre-flight checklist
 
-Before declaring done, walk through `Pre-Submission Checklist` in [`references/srs-template.md`](references/srs-template.md). Don't skip the "everything verified from source code" line — that's the most common failure.
+Before declaring done, walk through `Pre-Submission Checklist` in `/home/daytona/skills/srs-creator/references/srs-template.md`. Don't skip the "everything verified from source code" line — that's the most common failure.
 
 ## Common pitfalls
 

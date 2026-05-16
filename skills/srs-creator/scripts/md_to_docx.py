@@ -4,7 +4,7 @@ md_to_docx.py — convert an SRS markdown file to .docx with the IndiaMART cover
 
 Pipeline:
     1. Pandoc-convert <input.md> to a temp body.docx.
-    2. Clone assets/template.docx, replace `{{ API_NAME }}` with the uppercased
+    2. Clone assets/srs-template.docx, replace `{{ API_NAME }}` with the uppercased
        --api-name input inside word/document.xml (preserving leading whitespace).
     3. Open the modified template with python-docx, append every paragraph and
        table from the pandoc body in order. The cover (a grouped drawing) lives
@@ -37,7 +37,7 @@ from copy import deepcopy
 from pathlib import Path
 
 PLACEHOLDER = "{{ API_NAME }}"
-TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "template.docx"
+TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "srs-srs-template.docx"
 
 
 def die(code: int, msg: str) -> int:
@@ -80,9 +80,9 @@ def validate_template() -> int:
         with zipfile.ZipFile(TEMPLATE) as z:
             doc_xml = z.read("word/document.xml").decode("utf-8")
     except (zipfile.BadZipFile, KeyError) as e:
-        return die(5, f"template.docx is not a valid docx archive: {e}")
+        return die(5, f"srs-template.docx is not a valid docx archive: {e}")
     if PLACEHOLDER not in doc_xml:
-        return die(5, f"template.docx does not contain the placeholder {PLACEHOLDER!r}")
+        return die(5, f"srs-template.docx does not contain the placeholder {PLACEHOLDER!r}")
     return 0
 
 
@@ -109,7 +109,7 @@ def pandoc_convert(src: Path, dst: Path) -> int:
 
 
 def write_cover(template_src: Path, template_dst: Path, api_name: str) -> int:
-    """Copy template.docx to template_dst, replacing the placeholder in document.xml."""
+    """Copy srs-template.docx to template_dst, replacing the placeholder in document.xml."""
     replacement = api_name.upper()
     try:
         with zipfile.ZipFile(template_src, "r") as zin, zipfile.ZipFile(template_dst, "w", zipfile.ZIP_DEFLATED) as zout:
