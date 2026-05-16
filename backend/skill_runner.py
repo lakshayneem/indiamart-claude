@@ -206,6 +206,11 @@ def stream_skill(
         raw = "".join(chunks)
         session_id = _parse_session_id(raw)
 
+        # Save raw Claude stream-json so tool calls / bash commands are inspectable
+        raw_log_path = LOG_DIR / f"{run_id}_claude.jsonl"
+        with raw_log_path.open("w", encoding="utf-8") as f:
+            f.write(raw)
+
         current_stage = "downloading"
         yield emit({"stage": "downloading"})
 
@@ -228,10 +233,17 @@ def stream_skill(
             "execution_time": elapsed,
             "cost_usd": _parse_cost(raw),
             "session_id": session_id,
+            "claude_log": f"{run_id}_claude.jsonl",
         })
 
     except Exception as e:
-        yield emit({"stage": "error", "failed_at": current_stage, "error": str(e), "session_id": session_id})
+        yield emit({
+            "stage": "error",
+            "failed_at": current_stage,
+            "error": str(e),
+            "session_id": session_id,
+            "claude_log": f"{run_id}_claude.jsonl" if (LOG_DIR / f"{run_id}_claude.jsonl").exists() else None,
+        })
 
     finally:
         if sandbox:
