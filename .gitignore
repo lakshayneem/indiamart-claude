@@ -33,4 +33,5 @@ Thumbs.db
 
 # Logs / temp
 *.log
+logs/
 snapshot/*.tar

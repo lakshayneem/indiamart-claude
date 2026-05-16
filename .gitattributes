@@ -1,0 +1,28 @@
+# Force LF line endings for files that bash, python, and dotenv loaders read.
+# Without this, Windows checkouts get CRLF and break .env parsing, shell scripts,
+# and python script shebangs.
+
+# Default: leave most things to git's auto-detection
+* text=auto eol=lf
+
+# Force LF on these regardless of platform
+*.sh        text eol=lf
+*.py        text eol=lf
+*.md        text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.json      text eol=lf
+*.toml      text eol=lf
+.env        text eol=lf
+.env.*      text eol=lf
+Dockerfile  text eol=lf
+
+# Binary — never touch line endings
+*.docx      binary
+*.xlsx      binary
+*.pdf       binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary

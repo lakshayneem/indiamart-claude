@@ -9,9 +9,10 @@ Generates an IndiaMART-format Software Requirements Specification document from 
 
 ## Inputs (from the prompt)
 
-- `repo_url` — GitHub URL of the Go service.
+- `repo_url` — GitLab URL of the Go service. **The repo is already pre-fetched and extracted at `/home/daytona/workspace/repo/`.** Do not run `git clone`.
 - `api_name` — descriptive service name (e.g. *PC Item Approval Rule Master Write API*).
 - `business_requirement` — short prose: the problem this API solves, who consumes it.
+- `ticket_id` — *optional*. If provided, the OpenProject ticket is pre-fetched to `/home/daytona/workspace/ticket.json` and contains the work package body, all activities/comments (mention tags flattened, author names resolved), and attachment metadata. Use it for context only — the SRS body must still come from real code, never from ticket text.
 
 ## Reference
 
@@ -21,7 +22,7 @@ The full SRS structure — all 7 sections, every field rule, every validation pa
 
 ```
 Workflow Progress:
-- [ ] Step 1: Clone the repo and orient
+- [ ] Step 1: Orient in the pre-fetched repo
 - [ ] Step 2: Identify the Go entry points (controller, service, repository, router)
 - [ ] Step 3: Verify every fact from source — never invent
 - [ ] Step 4: Draft srs.md following references/srs-template.md
@@ -29,15 +30,17 @@ Workflow Progress:
 - [ ] Step 6: Verify both files exist and confirm in run.log
 ```
 
-### Step 1 — Clone and orient
+### Step 1 — Orient in the pre-fetched repo
+
+The repo is already at `/home/daytona/workspace/repo/` — fetched on the host before this sandbox started. **Do not run `git clone`** and do not try to network out for source; if the tree is missing, fail loudly.
 
 ```bash
-cd /home/daytona/workspace
-git clone <repo_url> repo
-cd repo
+ls /home/daytona/workspace/repo
 ```
 
-Skim the README, `cmd/`, `internal/`, `pkg/`. Find the service that matches `api_name`.
+Expected layout for an IndiaMART Go service: `cmd/`, `internal/`, `pkg/`, `go.mod`, plus `Dockerfile.*` variants per deployable. Skim `README*`, `cmd/`, `internal/`, `pkg/` and find the service that matches `api_name`.
+
+If `ticket_id` was provided, `/home/daytona/workspace/ticket.json` is also available — keys: `work_package` (subject, description, status, customFields), `activities` (comments + system events, each with `_resolved_author` and cleaned `comment.raw`), `attachments`. Read it for *context* about why the change is happening — do **not** lift field names, error messages, or behaviors from it into the SRS body.
 
 ### Step 2 — Find the four files
 
@@ -115,7 +118,8 @@ Both files must exist and be non-empty. End with a one-line confirmation in stdo
 ## Sample run log entry
 
 ```
-2026-05-16 10:32:14 cloned <repo_url> at HEAD <sha>
+2026-05-16 10:32:14 found pre-fetched repo at /home/daytona/workspace/repo (329 files, go.mod: service-api-go)
+2026-05-16 10:32:16 ticket.json present (WP 650234, 38 activities)
 2026-05-16 10:32:18 located controller at internal/pcrule/controller/write_controller.go
 2026-05-16 10:33:01 extracted 14 validation messages from controller + service
 2026-05-16 10:34:20 wrote /home/daytona/output/srs.md (38 KB)
@@ -132,3 +136,5 @@ Before declaring done, walk through `Pre-Submission Checklist` in [`references/s
 - Stopping at `srs.md` — the deliverable is the `.docx`. Step 5 is mandatory.
 - Inventing exact error message strings or table column names. If unverified, leave `_TBD_`.
 - Mixing app-level (`STATUS: FAILED`) and middleware-level (`STATUS: FAILURE`) error envelopes — they're different shapes; see the template.
+- Running `git clone` or any network fetch for source — the repo is pre-fetched at `/home/daytona/workspace/repo/`. The sandbox has no SCM credentials; clones will hang or fail.
+- Lifting field names / error strings / SQL from `ticket.json` into the SRS body. The ticket is context only; the SRS body must trace to lines in `repo/`.

@@ -14,10 +14,10 @@ owner: product-team
 
 input_fields:
   - key: repo_url
-    label: GitHub Repo URL
+    label: GitLab Repo URL
     type: text
     required: true
-    placeholder: "https://github.com/org/repo"
+    placeholder: "https://scm.intermesh.net/group/sub/project"
   - key: api_name
     label: API Name
     type: text
@@ -28,6 +28,11 @@ input_fields:
     type: textarea
     required: true
     placeholder: "Describe the business problem or feature you need documented..."
+  - key: ticket_id
+    label: OpenProject Work Package ID (optional)
+    type: text
+    required: false
+    placeholder: "e.g. 650234"
 
 adoption_projection:
   x_mins: 4

@@ -1,8 +1,13 @@
 import base64
+import html
 import json
 import logging
 import os
+import re
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -26,6 +31,81 @@ _config = DaytonaConfig(
 
 def _format_task(inputs: dict) -> str:
     return "\n".join(f"{k}: {v}" for k, v in inputs.items())
+
+
+_MENTION_RE = re.compile(r"<mention\b[^>]*>(.*?)</mention>", re.DOTALL | re.IGNORECASE)
+
+
+def _clean_comment(text: str) -> str:
+    return html.unescape(_MENTION_RE.sub(lambda m: m.group(1), text or ""))
+
+
+def _fetch_gitlab_archive(repo_url: str) -> bytes:
+    token = (os.environ.get("GITLAB_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("GITLAB_TOKEN not set in env")
+    repo_url = repo_url.strip().rstrip("/")
+    if repo_url.endswith(".git"):
+        repo_url = repo_url[:-4]
+    parsed = urllib.parse.urlparse(repo_url)
+    if parsed.scheme in ("http", "https"):
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        project_path = parsed.path.lstrip("/")
+    else:
+        base = (os.environ.get("GITLAB_URL") or "").rstrip("/")
+        if not base.startswith(("http://", "https://")):
+            raise RuntimeError("repo_url is a bare path but GITLAB_URL base is missing/invalid")
+        project_path = repo_url.lstrip("/")
+    if not project_path:
+        raise RuntimeError(f"could not extract project path from {repo_url!r}")
+    encoded = urllib.parse.quote(project_path, safe="")
+    url = f"{base}/api/v4/projects/{encoded}/repository/archive.tar.gz"
+    req = urllib.request.Request(url, headers={"PRIVATE-TOKEN": token})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:300]
+        raise RuntimeError(f"GitLab archive HTTP {e.code}: {body}") from e
+
+
+def _op_get(path: str) -> dict:
+    token = (os.environ.get("OPENPROJECT_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("OPENPROJECT_TOKEN not set in env")
+    base = (os.environ.get("OPENPROJECT_BASE_URL") or "https://project.intermesh.net").rstrip("/")
+    auth = base64.b64encode(f"apikey:{token}".encode()).decode()
+    url = f"{base}/api/v3{path}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Basic {auth}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:300]
+        raise RuntimeError(f"OpenProject HTTP {e.code} on {path}: {body}") from e
+
+
+def _fetch_openproject_ticket(wp_id) -> dict:
+    wp = _op_get(f"/work_packages/{wp_id}")
+    acts = _op_get(f"/work_packages/{wp_id}/activities?pageSize=1000")
+    atts = _op_get(f"/work_packages/{wp_id}/attachments")
+    elements = (acts.get("_embedded") or {}).get("elements") or []
+    user_cache: dict[str, str] = {}
+    for a in elements:
+        if (a.get("comment") or {}).get("raw"):
+            a["comment"]["raw"] = _clean_comment(a["comment"]["raw"])
+        href = ((a.get("_links") or {}).get("user") or {}).get("href") or ""
+        if href and href not in user_cache:
+            try:
+                user_cache[href] = _op_get(href.replace("/api/v3", "")).get("name") or "?"
+            except Exception:
+                user_cache[href] = "?"
+        a["_resolved_author"] = user_cache.get(href, "?")
+    return {
+        "work_package": wp,
+        "activities": elements,
+        "attachments": (atts.get("_embedded") or {}).get("elements") or [],
+    }
 
 
 def _parse_output(raw: str) -> str:
@@ -121,7 +201,24 @@ def stream_skill(
 
     sandbox = None
     session_id: str | None = None
+    repo_tarball: bytes | None = None
+    ticket_payload: dict | None = None
     try:
+        repo_url = (inputs.get("repo_url") or "").strip()
+        ticket_id = inputs.get("ticket_id")
+        if repo_url or ticket_id:
+            current_stage = "fetching_assets"
+            yield emit({"stage": "fetching_assets",
+                        "fetch_repo": bool(repo_url),
+                        "fetch_ticket": bool(ticket_id)})
+            if repo_url:
+                repo_tarball = _fetch_gitlab_archive(repo_url)
+            if ticket_id:
+                ticket_payload = _fetch_openproject_ticket(ticket_id)
+            yield emit({"stage": "assets_fetched",
+                        "repo_bytes": len(repo_tarball) if repo_tarball else 0,
+                        "ticket_activities": len(ticket_payload["activities"]) if ticket_payload else 0})
+
         current_stage = "sandbox_creating"
         yield emit({"stage": "sandbox_creating"})
 
@@ -168,14 +265,48 @@ def stream_skill(
             sandbox.fs.upload_file(content, f"/home/daytona/workspace/{safe_name}")
             uploaded_names.append(safe_name)
 
-        yield emit({"stage": "files_uploaded", "user_files": uploaded_names})
-
-        files_note = ""
-        if uploaded_names:
-            files_note = (
-                "\n\nUploaded files (in /home/daytona/workspace/):\n"
-                + "\n".join(f"  - {n}" for n in uploaded_names)
+        fetched_paths: list[str] = []
+        if repo_tarball:
+            sandbox.fs.upload_file(repo_tarball, "/home/daytona/workspace/_repo.tar.gz")
+            extract_cmd = (
+                "cd /home/daytona/workspace && "
+                "mkdir -p repo && "
+                "tar xzf _repo.tar.gz --strip-components=1 -C repo && "
+                "rm _repo.tar.gz && "
+                "find repo -maxdepth 1 -mindepth 1 | wc -l"
             )
+            r = sandbox.process.exec(extract_cmd, timeout=120)
+            if getattr(r, "exit_code", 0) != 0:
+                raise RuntimeError(
+                    f"repo extract failed (exit={r.exit_code}): {getattr(r, 'result', '')[:300]}"
+                )
+            fetched_paths.append("workspace/repo/")
+
+        if ticket_payload:
+            sandbox.fs.upload_file(
+                json.dumps(ticket_payload, ensure_ascii=False, indent=2).encode("utf-8"),
+                "/home/daytona/workspace/ticket.json",
+            )
+            fetched_paths.append("workspace/ticket.json")
+
+        yield emit({
+            "stage": "files_uploaded",
+            "user_files": uploaded_names,
+            "fetched_paths": fetched_paths,
+        })
+
+        notes_lines: list[str] = []
+        if uploaded_names:
+            notes_lines.append("Uploaded files (in /home/daytona/workspace/):")
+            notes_lines.extend(f"  - {n}" for n in uploaded_names)
+        if fetched_paths:
+            notes_lines.append("Pre-fetched assets:")
+            for p in fetched_paths:
+                if p.endswith("/"):
+                    notes_lines.append(f"  - /home/daytona/{p}  (source tree — read files with Read/Grep)")
+                else:
+                    notes_lines.append(f"  - /home/daytona/{p}")
+        files_note = ("\n\n" + "\n".join(notes_lines)) if notes_lines else ""
 
         prompt = (
             "Read /home/daytona/workspace/SKILL.md and execute the task described there.\n\n"
