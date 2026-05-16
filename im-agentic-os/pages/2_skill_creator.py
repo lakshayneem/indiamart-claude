@@ -61,41 +61,17 @@ def validate_zip(uploaded_file) -> tuple[bool, list, list, str]:
     except Exception as e:
         return False, [], [f"Invalid zip file: {e}"], ""
 
-# ── Top Nav & Logout ──────────────────────────────────────────────────────────
-topnav(user["name"], user["role"])
-if st.sidebar.button(":material/logout: Sign out"):
-    logout(); st.switch_page("app.py")
 
-with st.sidebar:
-    st.caption("Skill Creator Portal")
-    st.markdown(f"**{user['name']}** · {user['team']}")
-
-tab1, tab2, tab3, tab4 = st.tabs([
-    ":material/upload: Submit skill",
-    ":material/list: My skills",
-    ":material/chat: Feedback & ratings",
-    ":material/analytics: Analytics",
-])
-
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 1: SUBMIT SKILL
-# ════════════════════════════════════════════════════════════════════════════
-with tab1:
-    editing_skill_id = st.session_state.get("editing_skill")
-    if editing_skill_id:
-        st.info(f"✏️ **Edit mode** — updating **{editing_skill_id}**. Changes will go back to pending for admin re-review.")
-        section_heading("Edit Skill", "✏️")
-    else:
-        section_heading("Submit a New Skill", "📤")
-
+# ── Shared wizard renderer (used for both create and edit) ────────────────────
+def _render_skill_wizard():
     if "submit_step" not in st.session_state:
         st.session_state["submit_step"] = 1
     if "skill_draft" not in st.session_state:
         st.session_state["skill_draft"] = {}
 
     step = st.session_state["submit_step"]
+    editing_id = st.session_state.get("editing_skill")
 
-    # Step indicator
     steps = ["Source", "Metadata", "Input Fields", "Projection & Submit"]
     step_html = ""
     for i, s in enumerate(steps, 1):
@@ -106,11 +82,13 @@ with tab1:
 
     draft = st.session_state["skill_draft"]
 
-    # ── STEP 1: SOURCE ──────────────────────────────────────────────────────
+    # ── STEP 1: SOURCE ────────────────────────────────────────────────────────
     if step == 1:
         source_type = st.radio("How will you provide the skill?", ["📁 Upload ZIP folder", "🔗 Git Repo URL"], horizontal=True)
 
         if "ZIP" in source_type:
+            if editing_id:
+                st.markdown(f'<div class="im-form-helper">Current source: <code>{draft.get("source_ref","(unknown)")}</code> — upload a new ZIP to replace SKILL.md, or skip to keep the existing one.</div>', unsafe_allow_html=True)
             uploaded = st.file_uploader("Upload your skill folder as a .zip file", type=["zip"])
             st.markdown('<div class="im-form-helper">Your zip must contain SKILL.md at the root. A scripts/ folder is optional.</div>', unsafe_allow_html=True)
             if uploaded:
@@ -129,7 +107,8 @@ with tab1:
                         st.error("❌ Validation failed:")
                         for issue in issues: st.markdown(f"- {issue}")
         else:
-            repo_url = st.text_input("Git Repo URL", placeholder="https://github.com/org/repo")
+            repo_url = st.text_input("Git Repo URL", placeholder="https://github.com/org/repo",
+                                     value=draft.get("source_ref","") if draft.get("source_type") == "repo" else "")
             if repo_url:
                 draft["source_ref"] = repo_url
                 draft["source_type"] = "repo"
@@ -137,17 +116,19 @@ with tab1:
                     try:
                         r = requests.get(repo_url, timeout=5)
                         if r.status_code < 400:
-                            st.success(f"✅ Repository is accessible")
+                            st.success("✅ Repository is accessible")
                         else:
                             st.error("Could not reach this repository. Check the URL or access permissions.")
                     except:
                         st.error("Could not reach this repository. Check the URL or access permissions.")
 
-        if st.button("Next: Metadata →", type="primary", disabled=not draft.get("source_ref")):
+        # In edit mode the source already exists, so allow proceeding without re-uploading
+        can_proceed = bool(draft.get("source_ref")) or bool(editing_id)
+        if st.button("Next: Metadata →", type="primary", disabled=not can_proceed):
             st.session_state["submit_step"] = 2
             st.rerun()
 
-    # ── STEP 2: METADATA ────────────────────────────────────────────────────
+    # ── STEP 2: METADATA ──────────────────────────────────────────────────────
     elif step == 2:
         teams = load_teams()
 
@@ -175,10 +156,10 @@ with tab1:
                 elif not all(c.isalnum() or c in " -" for c in skill_name): errors.append("Skill name: alphanumeric, spaces, hyphens only.")
                 if not desc.startswith("Use this skill when"): errors.append('Description must start with "Use this skill when".')
 
-                # Duplicate check via backend
+                # Duplicate name check — allow same name when editing
                 existing = list_all_skills()
-                existing_names = [s["name"].lower() for s in existing]
-                if skill_name.lower() in existing_names and draft.get("name","").lower() != skill_name.lower():
+                existing_names = [s["name"].lower() for s in existing if s.get("skill_id") != editing_id]
+                if skill_name.lower() in existing_names:
                     errors.append("A skill with this name already exists.")
 
                 if errors:
@@ -189,7 +170,7 @@ with tab1:
                     st.session_state["submit_step"] = 3
                     st.rerun()
 
-    # ── STEP 3: INPUT FIELDS ─────────────────────────────────────────────────
+    # ── STEP 3: INPUT FIELDS ──────────────────────────────────────────────────
     elif step == 3:
         st.markdown("**Define the inputs users will see when running this skill.**")
 
@@ -235,7 +216,6 @@ with tab1:
             fields.append({"key":f"input_{n}","label":f"Input {n}","type":"text","required":True,"placeholder":""})
             st.rerun()
 
-        # Preview toggle
         show_preview = st.toggle("👁 Preview skill as users will see it", value=st.session_state.get("show_preview", False))
         st.session_state["show_preview"] = show_preview
         if show_preview:
@@ -279,7 +259,7 @@ with tab1:
                     draft["input_fields"] = fields
                     st.session_state["submit_step"] = 4; st.rerun()
 
-    # ── STEP 4: PROJECTION & SUBMIT ──────────────────────────────────────────
+    # ── STEP 4: PROJECTION & SUBMIT ───────────────────────────────────────────
     elif step == 4:
         section_heading("Adoption Projection", "📈")
         st.markdown("Help judges and admins understand the impact of your skill.")
@@ -308,25 +288,25 @@ with tab1:
         with col_back:
             if st.button("← Back"): st.session_state["submit_step"] = 3; st.rerun()
         with col_sub:
-            if st.button("📤 Submit Skill for Approval", type="primary", use_container_width=True):
+            btn_label = "💾 Submit Changes for Re-review" if editing_id else "📤 Submit Skill for Approval"
+            if st.button(btn_label, type="primary", use_container_width=True):
                 draft["adoption_projection"] = {
                     "x_mins": x_mins, "y_occurrences_per_day": y_occ,
                     "n_adopters": n_adopt, "hours_saved_per_month": hours_month
                 }
                 new_meta = {
-                    "skill_id": draft["name"].lower().replace(" ","-"),
+                    "skill_id": editing_id if editing_id else draft["name"].lower().replace(" ","-"),
                     "name": draft["name"], "description": draft["description"],
                     "team": draft["team"], "category": draft["category"],
                     "tags": draft.get("tags",[]),
                     "creator_id": user["username"],
-                    "version": 1,
-                    "is_featured": False,
+                    "version": draft.get("version", 1),
+                    "is_featured": draft.get("is_featured", False),
                     "source_type": draft.get("source_type","zip"),
                     "source_ref": draft.get("source_ref",""),
                     "input_fields": draft.get("input_fields",[]),
                     "adoption_projection": draft["adoption_projection"],
                 }
-                editing_id = st.session_state.get("editing_skill")
                 if editing_id:
                     resp = api_update_skill(editing_id, new_meta, skill_md=draft.get("skill_md", ""))
                     action, past = "skill_updated", "Updated"
@@ -335,15 +315,56 @@ with tab1:
                     action, past = "skill_submitted", "Submitted"
 
                 if resp.get("status") != "success":
-                    st.error(f"❌ Could not {action.replace('_',' ')}: {resp.get('error','unknown error')}")
+                    st.error(f"❌ {resp.get('error','Unknown error')}")
                 else:
                     log_audit(user["username"], action, new_meta["skill_id"], f"{past} skill: {new_meta['name']}")
                     st.success(f"✅ Skill {past.lower()}! Pending admin approval.")
-                    st.session_state["submit_step"] = 1
-                    st.session_state["skill_draft"] = {}
-                    st.session_state.pop("input_fields_draft", None)
-                    st.session_state.pop("editing_skill", None)
+                    for k in ["submit_step", "skill_draft", "input_fields_draft", "editing_skill"]:
+                        st.session_state.pop(k, None)
                     st.rerun()
+
+
+# ── Top Nav & Logout ──────────────────────────────────────────────────────────
+topnav(user["name"], user["role"])
+if st.sidebar.button(":material/logout: Sign out"):
+    logout(); st.switch_page("app.py")
+
+with st.sidebar:
+    st.caption("Skill Creator Portal")
+    st.markdown(f"**{user['name']}** · {user['team']}")
+
+
+# ── Page-level edit mode (overrides tabs so no tab-switching needed) ──────────
+_editing_id = st.session_state.get("editing_skill")
+if _editing_id:
+    col_info, col_cancel = st.columns([5, 1])
+    with col_info:
+        st.info(f"✏️ **Edit mode** — updating **{_editing_id}**. Changes will go back to pending for admin re-review.")
+    with col_cancel:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("✕ Cancel", use_container_width=True):
+            for k in ["editing_skill", "skill_draft", "input_fields_draft", "submit_step"]:
+                st.session_state.pop(k, None)
+            st.rerun()
+    section_heading("Edit Skill", "✏️")
+    _render_skill_wizard()
+    st.stop()
+
+
+# ── Normal tabs (shown only when not editing) ─────────────────────────────────
+tab1, tab2, tab3, tab4 = st.tabs([
+    ":material/upload: Submit skill",
+    ":material/list: My skills",
+    ":material/chat: Feedback & ratings",
+    ":material/analytics: Analytics",
+])
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 1: SUBMIT SKILL
+# ════════════════════════════════════════════════════════════════════════════
+with tab1:
+    section_heading("Submit a New Skill", "📤")
+    _render_skill_wizard()
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 2: MY SKILLS
@@ -366,6 +387,7 @@ with tab2:
                 if stat == "approved":
                     if st.button("🧪 Test", key=f"test_{sk['skill_id']}"):
                         st.session_state[f"testing_{sk['skill_id']}"] = True
+                if stat in ("approved", "pending"):
                     if st.button("✏️ Edit", key=f"edit_{sk['skill_id']}"):
                         st.session_state["submit_step"] = 1
                         st.session_state["skill_draft"] = dict(sk)
@@ -373,9 +395,12 @@ with tab2:
                         st.session_state.pop("input_fields_draft", None)
                         st.rerun()
                 elif stat == "rejected":
-                    if st.button("🔄 Resubmit", key=f"resub_{sk['skill_id']}"):
+                    if st.button("✏️ Edit & Resubmit", key=f"resub_{sk['skill_id']}"):
                         st.session_state["submit_step"] = 1
                         st.session_state["skill_draft"] = dict(sk)
+                        st.session_state["editing_skill"] = sk["skill_id"]
+                        st.session_state.pop("input_fields_draft", None)
+                        st.rerun()
 
             if stat == "rejected" and sk.get("rejection_reason"):
                 st.warning(f"⚠️ Rejection reason: {sk['rejection_reason']}")
@@ -399,7 +424,7 @@ with tab2:
                             st.success(f"✅ Skill working correctly (completed in {result.get('execution_time_seconds',0):.1f}s)")
                             st.markdown(result["output"][:500] + "...")
                         else:
-                            st.error(f"❌ Skill execution failed: {result.get('error','Unknown error')}. This skill will not be shown to users until errors are resolved.")
+                            st.error(f"❌ Skill execution failed: {result.get('error','Unknown error')}.")
                 if st.button("Close Test", key=f"close_test_{sk['skill_id']}"):
                     del st.session_state[f"testing_{sk['skill_id']}"]
                     st.rerun()
