@@ -224,7 +224,6 @@ def skill_dialog(sk, username):
             "downloading":      "Downloading outputs…",
         }
 
-        session_id_after_run: str | None = None
         with st.status("Running skill…", expanded=True) as run_status:
             for event in stream_skill_run(skill_id, collected, files=uploaded_files or None):
                 stage = event.get("stage")
@@ -235,7 +234,6 @@ def skill_dialog(sk, username):
                         label = f"✅ Files uploaded ({n} user file{'s' if n != 1 else ''})"
                     st.write(label)
                 elif stage == "complete":
-                    session_id_after_run = event.get("session_id")
                     result = {
                         "status": "success",
                         "output": event.get("output", ""),
@@ -247,7 +245,6 @@ def skill_dialog(sk, username):
                     }
                     run_status.update(label="✅ Complete", state="complete")
                 elif stage == "error":
-                    session_id_after_run = event.get("session_id")
                     result = {
                         "status": "error",
                         "error": event.get("error", "Unknown error"),
@@ -257,9 +254,6 @@ def skill_dialog(sk, username):
                         label=f"❌ Failed at: {event.get('failed_at', 'unknown')}",
                         state="error",
                     )
-
-        if session_id_after_run:
-            st.caption(f"Session ID: `{session_id_after_run}`")
 
         if result is None:
             result = {"status": "error", "error": "No response from backend", "execution_time_seconds": 0}
