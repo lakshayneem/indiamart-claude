@@ -53,6 +53,17 @@ def _parse_cost(raw: str) -> float:
     return 0.0
 
 
+def _parse_session_id(raw: str) -> str | None:
+    for line in raw.splitlines():
+        try:
+            ev = json.loads(line)
+            if ev.get("type") == "result":
+                return ev.get("session_id") or None
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 def _download_outputs(sandbox) -> dict[str, bytes]:
     try:
         files = sandbox.fs.list_files("/home/daytona/output")
@@ -109,6 +120,7 @@ def stream_skill(
         return event
 
     sandbox = None
+    session_id: str | None = None
     try:
         current_stage = "sandbox_creating"
         yield emit({"stage": "sandbox_creating"})
@@ -192,6 +204,7 @@ def stream_skill(
         pty.wait(on_data=lambda data: chunks.append(data.decode(errors="replace")))
         elapsed = time.time() - start
         raw = "".join(chunks)
+        session_id = _parse_session_id(raw)
 
         current_stage = "downloading"
         yield emit({"stage": "downloading"})
@@ -214,10 +227,11 @@ def stream_skill(
             "output_files_binary": binary_files,
             "execution_time": elapsed,
             "cost_usd": _parse_cost(raw),
+            "session_id": session_id,
         })
 
     except Exception as e:
-        yield emit({"stage": "error", "failed_at": current_stage, "error": str(e)})
+        yield emit({"stage": "error", "failed_at": current_stage, "error": str(e), "session_id": session_id})
 
     finally:
         if sandbox:
