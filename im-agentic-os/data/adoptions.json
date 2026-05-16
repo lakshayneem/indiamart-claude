@@ -110,5 +110,69 @@
     "status": "success",
     "execution_time": 34.0809063911438,
     "ran_at": "2026-05-15T22:37:25.681479"
+  },
+  {
+    "run_id": "b613a371",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "error",
+    "execution_time": 180,
+    "ran_at": "2026-05-16T11:03:45.648811"
+  },
+  {
+    "run_id": "f8cdf633",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "error",
+    "execution_time": 0,
+    "ran_at": "2026-05-16T12:16:31.186350"
+  },
+  {
+    "run_id": "35d69678",
+    "skill_id": "srs-creator",
+    "username": "im_creator",
+    "status": "success",
+    "execution_time": 163.68513536453247,
+    "ran_at": "2026-05-16T12:29:07.759817"
+  },
+  {
+    "run_id": "fa991f5e",
+    "skill_id": "srs-creator",
+    "username": "im_admin",
+    "status": "success",
+    "execution_time": 150.8419816493988,
+    "ran_at": "2026-05-16T14:43:06.683627"
+  },
+  {
+    "run_id": "48b126d9",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 110.78212642669678,
+    "ran_at": "2026-05-16T15:00:48.332256"
+  },
+  {
+    "run_id": "776bffef",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "success",
+    "execution_time": 2.1097233295440674,
+    "ran_at": "2026-05-16T15:12:58.258366"
+  },
+  {
+    "run_id": "3103ddbd",
+    "skill_id": "srs-creator",
+    "username": "im_user",
+    "status": "error",
+    "execution_time": 0,
+    "ran_at": "2026-05-16T15:21:39.458759"
+  },
+  {
+    "run_id": "a00c757c",
+    "skill_id": "srs-creator",
+    "username": "im_creator",
+    "status": "success",
+    "execution_time": 305.3685178756714,
+    "ran_at": "2026-05-16T15:32:40.216152"
   }
 ]

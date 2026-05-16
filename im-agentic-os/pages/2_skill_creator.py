@@ -306,6 +306,17 @@ def _render_skill_wizard():
                     st.rerun()
 
 
+@st.dialog("Edit Skill", width="large")
+def _edit_skill_dialog():
+    editing_id = st.session_state.get("editing_skill", "")
+    st.info(f"✏️ Updating **{editing_id}** — changes go back to pending for admin re-review.")
+    if st.button("✕ Cancel"):
+        for k in ["editing_skill", "skill_draft", "input_fields_draft", "submit_step"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+    _render_skill_wizard()
+
+
 # ── Top Nav & Logout ──────────────────────────────────────────────────────────
 topnav(user["name"], user["role"])
 if st.sidebar.button(":material/logout: Sign out"):
@@ -316,24 +327,11 @@ with st.sidebar:
     st.markdown(f"**{user['name']}** · {user['team']}")
 
 
-# ── Page-level edit mode (overrides tabs so no tab-switching needed) ──────────
-_editing_id = st.session_state.get("editing_skill")
-if _editing_id:
-    col_info, col_cancel = st.columns([5, 1])
-    with col_info:
-        st.info(f"✏️ **Edit mode** — updating **{_editing_id}**. Changes will go back to pending for admin re-review.")
-    with col_cancel:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("✕ Cancel", use_container_width=True):
-            for k in ["editing_skill", "skill_draft", "input_fields_draft", "submit_step"]:
-                st.session_state.pop(k, None)
-            st.rerun()
-    section_heading("Edit Skill", "✏️")
-    _render_skill_wizard()
-    st.stop()
+# ── Edit dialog (opens as overlay; user stays on current tab) ────────────────
+if st.session_state.get("editing_skill"):
+    _edit_skill_dialog()
 
-
-# ── Normal tabs (shown only when not editing) ─────────────────────────────────
+# ── Tabs ──────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
     ":material/upload: Submit skill",
     ":material/list: My skills",

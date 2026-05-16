@@ -189,7 +189,7 @@ def stream_skill(
     current_stage = "init"
 
     def emit(event: dict) -> dict:
-        event = {"run_id": run_id, "ts": time.time(), **event}
+        event = {"run_id": run_id, "ts": time.time(), "skill_id": skill_id, **event}
         log.info("[%s] stage=%s %s", run_id, event.get("stage"), event.get("detail", ""))
         with log_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")

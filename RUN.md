@@ -47,9 +47,11 @@ Verify: `curl http://localhost:8000/health` → `{"status":"ok"}`
 
 ```powershell
 cd C:\Users\IndiaMart\Downloads\indiamart-claude\im-agentic-os
-..\.venv\Scripts\Activate.ps1
+C:\Users\IndiaMart\Downloads\indiamart-claude\.venv\Scripts\Activate.ps1
 streamlit run app.py
 ```
+
+> **Note:** Use the absolute path for the venv activation. Relative `..\.venv` works in an interactive terminal but fails when launched via `Start-Process` (e.g. from a script or Claude).
 
 Streamlit will print the URL (default `http://localhost:8501`) and open it in your browser.
 

@@ -33,6 +33,7 @@ def load_json(path):
 def save_json(path, data):
     Path(path).write_text(json.dumps(data, indent=2))
 
+@st.cache_data(ttl=300)
 def load_config_teams():
     try:
         df = pd.read_excel("assets/config.xlsx", sheet_name="Teams")
@@ -40,6 +41,7 @@ def load_config_teams():
     except:
         return ["All teams"]
 
+@st.cache_data(ttl=300)
 def load_config_categories(team=None):
     try:
         df = pd.read_excel("assets/config.xlsx", sheet_name="Categories")
@@ -51,9 +53,15 @@ def load_config_categories(team=None):
     except:
         return ["All categories"]
 
+@st.cache_data(ttl=30)
+def _load_stats_data():
+    return (
+        load_json("data/adoptions.json"),
+        load_json("data/feedback.json"),
+    )
+
 def get_skill_stats(skill_id):
-    adoptions = load_json("data/adoptions.json")
-    feedback  = load_json("data/feedback.json")
+    adoptions, feedback = _load_stats_data()
     runs    = len([a for a in adoptions if a["skill_id"] == skill_id])
     ratings = [f["rating"] for f in feedback if f["skill_id"] == skill_id]
     avg     = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
@@ -70,6 +78,7 @@ def log_run(skill_id, username, status, exec_time):
         "ran_at": datetime.now().isoformat(),
     })
     save_json("data/adoptions.json", adoptions)
+    _load_stats_data.clear()
 
 def toggle_favourite(username, skill_id):
     favs = load_json("data/favourites.json")
@@ -163,15 +172,68 @@ def skill_dialog(sk, username):
     input_fields = sk.get("input_fields", [])
     est          = sk.get("adoption_projection", {}).get("x_mins", 0)
     ok, msg      = can_run(username, st.session_state.get("role", "user"), skill_id)
+    result_key   = f"_dlg_result_{skill_id}"
 
-    st.markdown(f"**{sk['name']}**")
-    if est:
-        st.caption(f":material/schedule: Estimated time: ~{est} min")
+    # Header with close button
+    h_col, close_col = st.columns([6, 1])
+    with h_col:
+        st.markdown(f"**{sk['name']}**")
+        if est:
+            st.caption(f":material/schedule: Estimated time: ~{est} min")
+    with close_col:
+        if st.button("✕ Close", key=f"dlg_close_{skill_id}"):
+            st.session_state.pop("_dialog_skill", None)
+            st.session_state.pop(result_key, None)
+            st.rerun()
 
     if not ok:
         st.warning(f":material/warning: {msg}")
         return
 
+    # ── Show stored result (persists across reruns so downloads don't close dialog)
+    stored = st.session_state.get(result_key)
+    if stored:
+        exec_time = stored.get("execution_time_seconds", 0)
+        if stored["status"] == "success":
+            st.success(f":material/check_circle: Completed in {exec_time:.1f}s")
+            render_output(stored["output"], exec_time, sk["name"], stored.get("source", "live"))
+            text_files = stored.get("output_files") or {}
+            bin_files  = stored.get("output_files_binary") or {}
+            all_files  = list(text_files) + list(bin_files)
+            if all_files:
+                st.markdown("**Download output files**")
+                dl_cols = st.columns(min(len(all_files), 4))
+                for i, fname in enumerate(all_files):
+                    mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                    data = base64.b64decode(bin_files[fname]) if fname in bin_files else text_files[fname].encode()
+                    with dl_cols[i % 4]:
+                        st.download_button(
+                            f":material/download: {fname}", data=data,
+                            file_name=fname, mime=mime,
+                            key=f"dl_{skill_id}_{fname}_{exec_time}",
+                        )
+            else:
+                st.download_button(
+                    ":material/download: Download output",
+                    data=stored["output"], file_name=f"{skill_id}_output.md",
+                    mime="text/markdown", key=f"dl_{skill_id}_main_{exec_time}",
+                )
+            run_key = str(exec_time)
+            if not st.session_state.get(f"fb_done_{skill_id}_{run_key}"):
+                st.divider()
+                st.markdown("**Rate this skill**")
+                rating  = st.slider("Rating", 1, 5, 4, key=f"dlg_rating_{skill_id}_{run_key}")
+                comment = st.text_area("Comment (optional)", key=f"dlg_comment_{skill_id}_{run_key}")
+                if st.button("Submit feedback", key=f"dlg_fb_{skill_id}_{run_key}"):
+                    submit_feedback(skill_id, username, rating, comment)
+                    st.session_state[f"fb_done_{skill_id}_{run_key}"] = True
+                    st.toast("Thank you for your feedback!", icon=":material/thumb_up:")
+                    st.rerun()
+        else:
+            render_error(stored.get("error", "Skill execution failed. Please try again."))
+        return
+
+    # ── Input form ────────────────────────────────────────────────────────────
     collected = {}
     uploaded_files = {}
     with st.form(key=f"dialog_form_{skill_id}", border=False):
@@ -180,7 +242,6 @@ def skill_dialog(sk, username):
             label      = field["label"] + (" *" if field.get("required") else "")
             ftype      = field.get("type", "text")
             placeholder = field.get("placeholder", "")
-
             if ftype == "textarea":
                 collected[key] = st.text_area(label, placeholder=placeholder, height=150)
             elif ftype == "number":
@@ -201,14 +262,9 @@ def skill_dialog(sk, username):
                     collected[key] = ""
             else:
                 collected[key] = st.text_input(label, placeholder=placeholder)
-
-        submitted = st.form_submit_button(
-            ":material/play_arrow: Run skill",
-            type="primary",
-        )
+        submitted = st.form_submit_button(":material/play_arrow: Run skill", type="primary")
 
     if submitted:
-        # Validate required fields
         missing = [f["label"] for f in input_fields if f.get("required") and not collected.get(f["key"])]
         if missing:
             st.error(f"Required: {', '.join(missing)}")
@@ -216,6 +272,8 @@ def skill_dialog(sk, username):
 
         result = None
         _stage_labels = {
+            "fetching_assets":  "Fetching repo & ticket…",
+            "assets_fetched":   "✅ Assets fetched",
             "sandbox_creating": "Creating sandbox…",
             "sandbox_ready":    "✅ Sandbox ready",
             "uploading_skill":  "Uploading skill files…",
@@ -259,54 +317,8 @@ def skill_dialog(sk, username):
             result = {"status": "error", "error": "No response from backend", "execution_time_seconds": 0}
 
         log_run(skill_id, username, result["status"], result.get("execution_time_seconds", 0))
-
-        if result["status"] == "success":
-            exec_time = result.get("execution_time_seconds", 0)
-            st.success(f":material/check_circle: Completed in {exec_time:.1f}s", icon=None)
-            render_output(result["output"], exec_time, sk["name"], result.get("source", "live"))
-
-            # ── Downloads ────────────────────────────────────────────────────
-            text_files = result.get("output_files") or {}
-            bin_files  = result.get("output_files_binary") or {}
-            all_files  = list(text_files) + list(bin_files)
-
-            if all_files:
-                st.markdown("**Download output files**")
-                dl_cols = st.columns(min(len(all_files), 4))
-                for i, fname in enumerate(all_files):
-                    mime = mimetypes.guess_type(fname)[0] or "application/octet-stream"
-                    data = base64.b64decode(bin_files[fname]) if fname in bin_files else text_files[fname].encode()
-                    with dl_cols[i % 4]:
-                        st.download_button(
-                            f":material/download: {fname}",
-                            data=data,
-                            file_name=fname,
-                            mime=mime,
-                            key=f"dl_{skill_id}_{fname}_{exec_time}",
-                        )
-            else:
-                st.download_button(
-                    ":material/download: Download output",
-                    data=result["output"],
-                    file_name=f"{skill_id}_output.md",
-                    mime="text/markdown",
-                    key=f"dl_{skill_id}_main_{exec_time}",
-                )
-
-            # Feedback
-            run_key = str(exec_time)
-            if not st.session_state.get(f"fb_done_{skill_id}_{run_key}"):
-                st.divider()
-                st.markdown("**Rate this skill**")
-                rating  = st.slider("Rating", 1, 5, 4, key=f"dlg_rating_{skill_id}_{run_key}")
-                comment = st.text_area("Comment (optional)", key=f"dlg_comment_{skill_id}_{run_key}")
-                if st.button("Submit feedback", key=f"dlg_fb_{skill_id}_{run_key}"):
-                    submit_feedback(skill_id, username, rating, comment)
-                    st.session_state[f"fb_done_{skill_id}_{run_key}"] = True
-                    st.toast("Thank you for your feedback!", icon=":material/thumb_up:")
-                    st.rerun()
-        else:
-            render_error(result.get("error", "Skill execution failed. Please try again."))
+        st.session_state[result_key] = result
+        st.rerun()
 
 # ── Top nav ──────────────────────────────────────────────────────────────────
 topnav(user["name"], user["role"])
@@ -351,9 +363,11 @@ if announcements:
 
 # ── Open skill dialog if requested ───────────────────────────────────────────
 if "active_skill" in st.session_state:
-    sk = st.session_state.pop("active_skill_data", {})
+    st.session_state["_dialog_skill"] = st.session_state.pop("active_skill_data", {})
     st.session_state.pop("active_skill", None)
-    skill_dialog(sk, user["username"])
+
+if st.session_state.get("_dialog_skill"):
+    skill_dialog(st.session_state["_dialog_skill"], user["username"])
 
 # ════════════════════════════════════════════════════════════════════════════
 # BROWSE SKILLS

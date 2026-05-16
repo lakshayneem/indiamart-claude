@@ -11,9 +11,10 @@ import random
 import time
 
 import requests
+import streamlit as st
 
 SANDBOX_URL = os.environ.get("SANDBOX_URL", "http://localhost:8000")
-RUN_TIMEOUT_SECONDS = 180
+RUN_TIMEOUT_SECONDS = 600
 
 
 # ── Mock fallback content (used only when backend is unreachable) ─────────────
@@ -29,6 +30,7 @@ MOCK_TEST_CASES = """# Test Cases — (mock)
 
 
 # ── Generic helpers ───────────────────────────────────────────────────────────
+@st.cache_data(ttl=15)
 def check_sandbox_health() -> bool:
     try:
         r = requests.get(f"{SANDBOX_URL}/health", timeout=3)
@@ -49,6 +51,7 @@ def _error_result(skill_id: str, message: str, *, exec_time: float = 0.0) -> dic
 
 
 # ── Catalog API ───────────────────────────────────────────────────────────────
+@st.cache_data(ttl=30)
 def list_skills(team: str | None = None, category: str | None = None,
                 search: str | None = None) -> list[dict]:
     params = {k: v for k, v in {"team": team, "category": category, "search": search}.items() if v}
@@ -60,6 +63,7 @@ def list_skills(team: str | None = None, category: str | None = None,
         return []
 
 
+@st.cache_data(ttl=30)
 def list_all_skills(status: str | None = None) -> list[dict]:
     params = {"status": status} if status else {}
     try:
@@ -70,6 +74,7 @@ def list_all_skills(status: str | None = None) -> list[dict]:
         return []
 
 
+@st.cache_data(ttl=30)
 def get_skill(skill_id: str) -> dict | None:
     try:
         r = requests.get(f"{SANDBOX_URL}/skills/{skill_id}", timeout=5)

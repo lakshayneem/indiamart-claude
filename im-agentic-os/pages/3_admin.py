@@ -82,6 +82,7 @@ nav = st.sidebar.radio(
         ":material/bar_chart: Analytics",
         ":material/history: Audit Log",
         ":material/campaign: Announcements",
+        ":material/search: Run Logs",
     ],
     label_visibility="collapsed",
 )
@@ -97,14 +98,12 @@ if "Dashboard" in nav:
     adoptions = load_json("data/adoptions.json")
     today     = datetime.now().date().isoformat()
     runs_today = len([a for a in adoptions if a["ran_at"][:10] == today])
-    stats     = compute_hours_saved(period="month")
 
     with st.container(horizontal=True):
-        st.metric("Active skills",      len(approved),                                    border=True)
-        st.metric("Pending approval",   len(pending),                                     border=True)
-        st.metric("Total users",        len(all_users),                                   border=True)
-        st.metric("Runs today",         runs_today,                                       border=True)
-        st.metric("Hours saved (month)", f"{format_hours(stats['hours'])}h",              border=True)
+        st.metric("Active skills",    len(approved),  border=True)
+        st.metric("Pending approval", len(pending),   border=True)
+        st.metric("Total users",      len(all_users), border=True)
+        st.metric("Runs today",       runs_today,     border=True)
 
     st.space("small")
     section_heading("Recent activity", ":material/history:")
@@ -531,3 +530,122 @@ elif "Announcements" in nav:
                     if st.button("Cancel", key=f"canc_del_{ann['announcement_id']}"):
                         del st.session_state[f"confirm_del_{ann['announcement_id']}"]
                         st.rerun()
+
+# ════════════════════════════════════════════════════════════════════════════
+# RUN LOGS
+# ════════════════════════════════════════════════════════════════════════════
+elif "Logs" in nav:
+    section_heading("Run Logs", ":material/search:")
+
+    LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+
+    if not LOG_DIR.exists() or not any(LOG_DIR.glob("*.jsonl")):
+        st.info("No run logs yet — they appear here after skills are executed.")
+    else:
+        col_s, col_f = st.columns([3, 2])
+        with col_s:
+            log_search = st.text_input("Search run ID or skill", placeholder="Search…", key="log_search")
+        with col_f:
+            log_status = st.selectbox("Status", ["All", "complete", "error"], key="log_status")
+
+        runs = []
+        for lf in sorted(LOG_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if "_claude" in lf.stem:
+                continue
+            events = []
+            try:
+                for line in lf.read_text(encoding="utf-8", errors="replace").splitlines():
+                    line = line.strip()
+                    if line:
+                        try:
+                            events.append(json.loads(line))
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+            if not events:
+                continue
+            first = events[0]
+            final = next((e for e in reversed(events) if e.get("stage") in ("complete", "error")), {})
+            runs.append({
+                "run_id":    first.get("run_id", lf.stem[:8]),
+                "skill_id":  first.get("skill_id", "—"),
+                "ts":        datetime.fromtimestamp(first.get("ts", 0)).strftime("%Y-%m-%d %H:%M"),
+                "status":    final.get("stage", "running"),
+                "exec_time": round(final.get("execution_time", 0), 1),
+                "cost_usd":  final.get("cost_usd", 0.0),
+                "failed_at": final.get("failed_at", ""),
+                "error":     final.get("error", ""),
+                "claude_log": final.get("claude_log", lf.stem + "_claude.jsonl"),
+                "events":    events,
+            })
+
+        if log_search:
+            q = log_search.lower()
+            runs = [r for r in runs if q in r["run_id"].lower() or q in r["skill_id"].lower()]
+        if log_status != "All":
+            runs = [r for r in runs if r["status"] == log_status]
+
+        st.caption(f"{len(runs)} run(s) shown")
+
+        for run in runs[:100]:
+            icon = "✅" if run["status"] == "complete" else "❌" if run["status"] == "error" else "⏳"
+            meta = f"{run['exec_time']}s · ${run['cost_usd']:.4f}" if run["status"] == "complete" else (f"failed at **{run['failed_at']}**" if run["failed_at"] else "")
+            label = f"{icon} `{run['run_id']}` &nbsp;·&nbsp; **{run['skill_id']}** &nbsp;·&nbsp; {run['ts']}" + (f" &nbsp;·&nbsp; {meta}" if meta else "")
+
+            with st.expander(f"{icon} {run['run_id']} — {run['skill_id']} — {run['ts']}"):
+                # Stage timeline
+                st.markdown("**Stages**")
+                for ev in run["events"]:
+                    stage = ev.get("stage", "")
+                    ts_str = datetime.fromtimestamp(ev.get("ts", 0)).strftime("%H:%M:%S")
+                    if stage == "error":
+                        st.markdown(f"❌ `{ts_str}` **{stage}** — {ev.get('error','')[:120]}")
+                    elif stage == "complete":
+                        st.markdown(f"✅ `{ts_str}` **{stage}** — {run['exec_time']}s / ${run['cost_usd']:.4f}")
+                    elif stage:
+                        extra = ""
+                        if stage == "assets_fetched":
+                            extra = f" — repo: {ev.get('repo_bytes',0)//1024}KB, activities: {ev.get('ticket_activities',0)}"
+                        elif stage == "files_uploaded":
+                            extra = f" — {ev.get('fetched_paths', [])}"
+                        st.markdown(f"▸ `{ts_str}` **{stage}**{extra}")
+
+                # Claude trace
+                claude_path = LOG_DIR / run["claude_log"]
+                if claude_path.exists():
+                    with st.expander("🤖 Claude trace"):
+                        try:
+                            tool_events = []
+                            for line in claude_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                                try:
+                                    ev = json.loads(line)
+                                except Exception:
+                                    continue
+                                if ev.get("type") == "assistant":
+                                    for block in ev.get("message", {}).get("content", []):
+                                        if block.get("type") == "tool_use":
+                                            name = block["name"]
+                                            inp  = block.get("input", {})
+                                            if name == "Bash":
+                                                cmd = inp.get("command", "")[:200]
+                                                tool_events.append(f"**Bash** `{cmd}`")
+                                            elif name in ("Read", "Write", "Edit"):
+                                                fp = inp.get("file_path", inp.get("path", ""))
+                                                tool_events.append(f"**{name}** `{fp}`")
+                                            elif name == "Grep":
+                                                tool_events.append(f"**Grep** `{inp.get('pattern','')}` in `{inp.get('path','')}`")
+                                            else:
+                                                tool_events.append(f"**{name}**")
+                                        elif block.get("type") == "text" and block.get("text","").strip():
+                                            snippet = block["text"].strip()[:120].replace("\n", " ")
+                                            tool_events.append(f"*{snippet}*")
+                            if tool_events:
+                                for t in tool_events:
+                                    st.markdown(f"— {t}")
+                            else:
+                                st.caption("No tool calls found — log may still be raw PTY output.")
+                        except Exception as e:
+                            st.error(f"Could not read Claude log: {e}")
+                else:
+                    st.caption("Claude log not found for this run.")
