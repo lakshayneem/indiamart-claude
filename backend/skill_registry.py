@@ -133,6 +133,27 @@ def set_skill_status(skill_id: str, status: str, reason: Optional[str] = None) -
     return meta
 
 
+def admin_update_skill(skill_id: str, metadata: dict, skill_md: str = "") -> dict:
+    """Admin update — preserves current status, does NOT bump version or reset to pending."""
+    target = _skill_dir(skill_id)
+    if not target.exists():
+        raise SkillNotFoundError(f"Skill '{skill_id}' not found")
+    existing = load_skill_metadata(skill_id)
+    metadata = dict(metadata)
+    metadata["skill_id"] = skill_id
+    metadata["status"] = existing.get("status", "pending")
+    metadata.setdefault("version", existing.get("version", 1))
+    metadata.setdefault("created_at", existing.get("created_at", datetime.now().isoformat()))
+    if existing.get("approved_at"):
+        metadata["approved_at"] = existing["approved_at"]
+    if existing.get("rejection_reason"):
+        metadata["rejection_reason"] = existing["rejection_reason"]
+    _write_metadata(skill_id, metadata)
+    if skill_md:
+        (target / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    return metadata
+
+
 def delete_skill(skill_id: str) -> None:
     target = _skill_dir(skill_id)
     if not target.exists():

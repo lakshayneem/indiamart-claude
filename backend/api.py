@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from .skill_registry import (
     SkillAlreadyExistsError,
     SkillNotFoundError,
+    admin_update_skill,
     create_pending_skill,
     delete_skill,
     list_skills,
@@ -116,6 +117,17 @@ def reject_skill(skill_id: str, payload: RejectRequest):
         return set_skill_status(skill_id, "rejected", payload.reason)
     except SkillNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.patch("/skills/{skill_id}")
+def admin_update_skill_endpoint(skill_id: str, payload: CreateSkillRequest):
+    """Admin update — preserves current status, no re-review required."""
+    try:
+        return admin_update_skill(skill_id, payload.metadata, payload.skill_md)
+    except SkillNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/skills/{skill_id}", status_code=204)

@@ -13,6 +13,7 @@ from components.sandbox_client import (
     list_all_skills as api_list_all_skills,
     approve_skill as api_approve_skill,
     reject_skill as api_reject_skill,
+    admin_update_skill as api_admin_update_skill,
 )
 
 st.set_page_config(page_title="IM Agentic OS — Admin", page_icon=":material/admin_panel_settings:", layout="wide")
@@ -44,6 +45,15 @@ def reject_skill(skill_id, reason):
         log_audit(user["username"], "skill_rejected", skill_id, f"Rejected: {reason}")
         return True
     return False
+
+def admin_edit_skill(skill_id, metadata, skill_md=""):
+    resp = api_admin_update_skill(skill_id, metadata, skill_md)
+    if resp.get("status") == "success":
+        skill = resp.get("skill", {})
+        log_audit(user["username"], "skill_edited_by_admin", skill_id, f"Admin edited skill: {skill.get('name', skill_id)}")
+        return True
+    return False
+
 
 def load_rate_limits():
     try:
@@ -176,6 +186,7 @@ elif "Approvals" in nav:
 
     for sk in filtered:
         stat = sk.get("status","pending")
+        sid = sk["skill_id"]
         with st.expander(f"{'🆕' if stat=='pending' else '✅' if stat=='approved' else '❌'} {sk['name']} — by {sk.get('creator_id','')}"):
             c1, c2 = st.columns(2)
             with c1:
@@ -191,28 +202,70 @@ elif "Approvals" in nav:
                     st.warning(f"Rejection reason: {sk['rejection_reason']}")
 
             if stat == "pending":
-                is_checked = sk["skill_id"] in st.session_state["bulk_selected"]
-                if st.checkbox("Select for bulk action", value=is_checked, key=f"chk_{sk['skill_id']}"):
-                    st.session_state["bulk_selected"].add(sk["skill_id"])
+                is_checked = sid in st.session_state["bulk_selected"]
+                if st.checkbox("Select for bulk action", value=is_checked, key=f"chk_{sid}"):
+                    st.session_state["bulk_selected"].add(sid)
                 else:
-                    st.session_state["bulk_selected"].discard(sk["skill_id"])
+                    st.session_state["bulk_selected"].discard(sid)
 
-                c_app, c_rej = st.columns(2)
+                c_app, c_rej, c_edit = st.columns(3)
                 with c_app:
-                    if st.button("✅ Approve", key=f"app_{sk['skill_id']}", type="primary"):
-                        approve_skill(sk["skill_id"])
+                    if st.button("✅ Approve", key=f"app_{sid}", type="primary"):
+                        approve_skill(sid)
                         st.success(f"Approved: {sk['name']}"); st.rerun()
                 with c_rej:
-                    if st.button("❌ Reject", key=f"rej_{sk['skill_id']}"):
-                        st.session_state[f"rejecting_{sk['skill_id']}"] = True
-                if st.session_state.get(f"rejecting_{sk['skill_id']}"):
-                    reason = st.text_area("Rejection reason *", key=f"rej_reason_{sk['skill_id']}")
-                    if st.button("Confirm Reject", key=f"conf_rej_{sk['skill_id']}"):
+                    if st.button("❌ Reject", key=f"rej_{sid}"):
+                        st.session_state[f"rejecting_{sid}"] = True
+                with c_edit:
+                    if st.button("✏️ Edit", key=f"edit_{sid}"):
+                        st.session_state[f"admin_editing_{sid}"] = not st.session_state.get(f"admin_editing_{sid}", False)
+                if st.session_state.get(f"rejecting_{sid}"):
+                    reason = st.text_area("Rejection reason *", key=f"rej_reason_{sid}")
+                    if st.button("Confirm Reject", key=f"conf_rej_{sid}"):
                         if len(reason) < 20: st.error("Reason must be at least 20 characters.")
                         else:
-                            reject_skill(sk["skill_id"], reason)
-                            del st.session_state[f"rejecting_{sk['skill_id']}"]
+                            reject_skill(sid, reason)
+                            del st.session_state[f"rejecting_{sid}"]
                             st.success("Skill rejected."); st.rerun()
+            else:
+                c_edit = st.columns(1)[0]
+                with c_edit:
+                    if st.button("✏️ Edit", key=f"edit_{sid}"):
+                        st.session_state[f"admin_editing_{sid}"] = not st.session_state.get(f"admin_editing_{sid}", False)
+
+            # ── Inline admin edit form ────────────────────────────────────────
+            if st.session_state.get(f"admin_editing_{sid}"):
+                st.markdown("---")
+                st.markdown("**Edit skill** *(status preserved — no re-review triggered)*")
+                proj = sk.get("adoption_projection", {})
+                with st.form(key=f"admin_edit_form_{sid}"):
+                    e_desc = st.text_area("Description", value=sk.get("description",""), key=f"e_desc_{sid}")
+                    e_tags = st.text_input("Tags (comma-separated)", value=", ".join(sk.get("tags",[])), key=f"e_tags_{sid}")
+                    st.markdown("**Adoption projection**")
+                    ec1, ec2, ec3 = st.columns(3)
+                    with ec1: e_mins = st.number_input("Minutes saved / run", min_value=0, value=int(proj.get("x_mins",0)), key=f"e_mins_{sid}")
+                    with ec2: e_occ  = st.number_input("Occurrences / day", min_value=0, value=int(proj.get("y_occurrences_per_day",0)), key=f"e_occ_{sid}")
+                    with ec3: e_nadp = st.number_input("Adopters", min_value=0, value=int(proj.get("n_adopters",0)), key=f"e_nadp_{sid}")
+                    e_skill_md = st.text_area("SKILL.md content (leave blank to keep existing)", value="", height=200, key=f"e_md_{sid}")
+                    submitted = st.form_submit_button("💾 Save changes", type="primary")
+
+                if submitted:
+                    hours_per_month = round(e_mins * e_occ * e_nadp * 22 / 60, 1)
+                    new_meta = dict(sk)
+                    new_meta["description"] = e_desc
+                    new_meta["tags"] = [t.strip() for t in e_tags.split(",") if t.strip()]
+                    new_meta["adoption_projection"] = {
+                        "x_mins": e_mins,
+                        "y_occurrences_per_day": e_occ,
+                        "n_adopters": e_nadp,
+                        "hours_saved_per_month": hours_per_month,
+                    }
+                    ok = admin_edit_skill(sid, new_meta, skill_md=e_skill_md)
+                    if ok:
+                        st.session_state[f"admin_editing_{sid}"] = False
+                        st.success("Skill updated."); st.rerun()
+                    else:
+                        st.error("Update failed — check backend logs.")
 
 # ════════════════════════════════════════════════════════════════════════════
 # USER MANAGEMENT
