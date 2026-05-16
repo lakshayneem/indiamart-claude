@@ -173,4 +173,3 @@ No backend changes needed — the skill is picked up automatically.
 | 3 | Session manager (replaced by stateless runner) | ✅ Done |
 | 4 | FastAPI backend + stateless skill runner | ✅ Done |
 | 5 | Streamlit frontend (`im-agentic-os`) | ✅ Done |
-| 6 | Hardening + audit log | 🔲 Planned |
