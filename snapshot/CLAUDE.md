@@ -28,6 +28,20 @@ A new sandbox is created for every skill run and destroyed after.
 4. Write the primary output as instructed by SKILL.md (typically `output/report.md` or similar)
 5. End with a one-line confirmation: which files you produced and where
 
+## Skill files layout
+
+Your skill's supporting files (references, scripts, assets) are at `$CLAUDE_SKILL_DIR` (env var, always set; expands inside `Bash` and is readable via `env`). The standard layout is:
+
+```
+$CLAUDE_SKILL_DIR/
+  SKILL.md       ← also copied to /home/daytona/workspace/SKILL.md
+  references/    ← long-form reference docs (load on demand with Read)
+  scripts/       ← helper scripts you can run (python3, bash)
+  assets/        ← templates, fixtures, binary assets
+```
+
+**When SKILL.md references `references/foo.md` or `scripts/bar.py`, the path is relative to `$CLAUDE_SKILL_DIR`, not to the workspace.** Read `$CLAUDE_SKILL_DIR/references/foo.md` (or use `${CLAUDE_SKILL_DIR}/scripts/bar.py` inside a Bash command — the shell expands it).
+
 ## Output conventions
 
 - Main report → markdown file in `output/` (e.g. `report.md`, `review.md`, `api-doc.md`)
