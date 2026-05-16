@@ -9,11 +9,14 @@ from components.auth import require_role, get_current_user, logout, get_all_user
 from components.hours_counter import compute_hours_saved, format_hours
 from components.announcement_banner import post_announcement, update_announcement, delete_announcement
 from components.sandbox_client import (
+    list_skills,
+    list_all_skills,
     list_skills as api_list_skills,
     list_all_skills as api_list_all_skills,
     approve_skill as api_approve_skill,
     reject_skill as api_reject_skill,
     admin_update_skill as api_admin_update_skill,
+    delete_skill as api_delete_skill,
 )
 
 st.set_page_config(page_title="IM Agentic OS — Admin", page_icon=":material/admin_panel_settings:", layout="wide")
@@ -207,7 +210,7 @@ elif "Approvals" in nav:
                 else:
                     st.session_state["bulk_selected"].discard(sid)
 
-                c_app, c_rej, c_edit = st.columns(3)
+                c_app, c_rej, c_edit, c_del = st.columns(4)
                 with c_app:
                     if st.button("✅ Approve", key=f"app_{sid}", type="primary"):
                         approve_skill(sid)
@@ -218,6 +221,9 @@ elif "Approvals" in nav:
                 with c_edit:
                     if st.button("✏️ Edit", key=f"edit_{sid}"):
                         st.session_state[f"admin_editing_{sid}"] = not st.session_state.get(f"admin_editing_{sid}", False)
+                with c_del:
+                    if st.button("🗑 Delete", key=f"del_{sid}"):
+                        st.session_state[f"confirm_del_{sid}"] = True
                 if st.session_state.get(f"rejecting_{sid}"):
                     reason = st.text_area("Rejection reason *", key=f"rej_reason_{sid}")
                     if st.button("Confirm Reject", key=f"conf_rej_{sid}"):
@@ -227,10 +233,30 @@ elif "Approvals" in nav:
                             del st.session_state[f"rejecting_{sid}"]
                             st.success("Skill rejected."); st.rerun()
             else:
-                c_edit = st.columns(1)[0]
+                c_edit, c_del = st.columns(2)
                 with c_edit:
                     if st.button("✏️ Edit", key=f"edit_{sid}"):
                         st.session_state[f"admin_editing_{sid}"] = not st.session_state.get(f"admin_editing_{sid}", False)
+                with c_del:
+                    if st.button("🗑 Delete", key=f"del_{sid}"):
+                        st.session_state[f"confirm_del_{sid}"] = True
+
+            if st.session_state.get(f"confirm_del_{sid}"):
+                st.warning(f"⚠️ Permanently delete **{sk['name']}**? This cannot be undone.")
+                cd1, cd2 = st.columns(2)
+                with cd1:
+                    if st.button("Confirm Delete", key=f"conf_del_{sid}", type="primary"):
+                        resp = api_delete_skill(sid)
+                        if resp.get("status") == "success":
+                            log_audit(user["username"], "skill_deleted", sid, f"Deleted skill: {sk['name']}")
+                            st.session_state.pop(f"confirm_del_{sid}", None)
+                            list_skills.clear(); list_all_skills.clear()
+                            st.success(f"Deleted: {sk['name']}"); st.rerun()
+                        else:
+                            st.error(f"Delete failed: {resp.get('error','unknown')}")
+                with cd2:
+                    if st.button("Cancel", key=f"canc_del_{sid}"):
+                        st.session_state.pop(f"confirm_del_{sid}", None); st.rerun()
 
             # ── Inline admin edit form ────────────────────────────────────────
             if st.session_state.get(f"admin_editing_{sid}"):
