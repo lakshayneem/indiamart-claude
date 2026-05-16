@@ -10,6 +10,7 @@ from .skill_registry import load_skill_md
 
 SNAPSHOT = os.environ.get("SNAPSHOT_NAME", "company-claude-v1")
 GLOBAL_CLAUDE_MD = Path(__file__).parent.parent / "snapshot" / "CLAUDE.md"
+SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
 _config = DaytonaConfig(
     api_key=os.environ["DAYTONA_API_KEY"],
@@ -93,6 +94,8 @@ def run_skill(
     task = _format_task(inputs)
     files = files or {}
 
+    skill_dir_in_sandbox = f"/home/daytona/skills/{skill_id}"
+
     daytona = Daytona(_config)
     sandbox = daytona.create(
         CreateSandboxFromSnapshotParams(
@@ -100,6 +103,7 @@ def run_skill(
             env_vars={
                 "ANTHROPIC_BASE_URL": os.environ["ANTHROPIC_BASE_URL"],
                 "ANTHROPIC_AUTH_TOKEN": os.environ["ANTHROPIC_AUTH_TOKEN"],
+                "CLAUDE_SKILL_DIR": skill_dir_in_sandbox,
             },
             auto_stop_interval=30,
         )
@@ -111,6 +115,17 @@ def run_skill(
             sandbox.fs.upload_file(GLOBAL_CLAUDE_MD.read_bytes(), "/home/daytona/CLAUDE.md")
 
         sandbox.fs.upload_file(skill_md, "/home/daytona/workspace/SKILL.md")
+
+        # Upload skill support files (scripts/, assets/, references/) so skills
+        # that reference ${CLAUDE_SKILL_DIR} find their dependencies in the sandbox.
+        skill_local_dir = SKILLS_DIR / skill_id
+        for fpath in sorted(skill_local_dir.rglob("*")):
+            if fpath.is_file() and fpath.name != "metadata.yaml":
+                rel = fpath.relative_to(skill_local_dir).as_posix()
+                sandbox.fs.upload_file(
+                    fpath.read_bytes(),
+                    f"{skill_dir_in_sandbox}/{rel}",
+                )
 
         uploaded_names: list[str] = []
         for filename, content in files.items():
