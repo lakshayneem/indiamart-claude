@@ -7,7 +7,7 @@ from datetime import datetime
 
 from components.design_system import inject_css, topnav, badge, section_heading, stars, empty_state, loading_animation, metric_card
 from components.auth import require_role, get_current_user, logout
-from components.sandbox_client import run_skill, create_skill as api_create_skill, list_all_skills
+from components.sandbox_client import run_skill, create_skill as api_create_skill, update_skill as api_update_skill, list_all_skills
 from components.hours_counter import compute_hours_saved, format_hours
 from scripts.fetch_data import fetch_creator_skills
 
@@ -81,7 +81,12 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # TAB 1: SUBMIT SKILL
 # ════════════════════════════════════════════════════════════════════════════
 with tab1:
-    section_heading("Submit a New Skill", "📤")
+    editing_skill_id = st.session_state.get("editing_skill")
+    if editing_skill_id:
+        st.info(f"✏️ **Edit mode** — updating **{editing_skill_id}**. Changes will go back to pending for admin re-review.")
+        section_heading("Edit Skill", "✏️")
+    else:
+        section_heading("Submit a New Skill", "📤")
 
     if "submit_step" not in st.session_state:
         st.session_state["submit_step"] = 1
@@ -321,15 +326,23 @@ with tab1:
                     "input_fields": draft.get("input_fields",[]),
                     "adoption_projection": draft["adoption_projection"],
                 }
-                resp = api_create_skill(new_meta, skill_md=draft.get("skill_md", ""))
-                if resp.get("status") != "success":
-                    st.error(f"❌ Could not submit skill: {resp.get('error','unknown error')}")
+                editing_id = st.session_state.get("editing_skill")
+                if editing_id:
+                    resp = api_update_skill(editing_id, new_meta, skill_md=draft.get("skill_md", ""))
+                    action, past = "skill_updated", "Updated"
                 else:
-                    log_audit(user["username"], "skill_submitted", new_meta["skill_id"], f"Submitted skill: {new_meta['name']}")
-                    st.success("✅ Skill submitted! Pending admin approval.")
+                    resp = api_create_skill(new_meta, skill_md=draft.get("skill_md", ""))
+                    action, past = "skill_submitted", "Submitted"
+
+                if resp.get("status") != "success":
+                    st.error(f"❌ Could not {action.replace('_',' ')}: {resp.get('error','unknown error')}")
+                else:
+                    log_audit(user["username"], action, new_meta["skill_id"], f"{past} skill: {new_meta['name']}")
+                    st.success(f"✅ Skill {past.lower()}! Pending admin approval.")
                     st.session_state["submit_step"] = 1
                     st.session_state["skill_draft"] = {}
                     st.session_state.pop("input_fields_draft", None)
+                    st.session_state.pop("editing_skill", None)
                     st.rerun()
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -357,6 +370,8 @@ with tab2:
                         st.session_state["submit_step"] = 1
                         st.session_state["skill_draft"] = dict(sk)
                         st.session_state["editing_skill"] = sk["skill_id"]
+                        st.session_state.pop("input_fields_draft", None)
+                        st.rerun()
                 elif stat == "rejected":
                     if st.button("🔄 Resubmit", key=f"resub_{sk['skill_id']}"):
                         st.session_state["submit_step"] = 1

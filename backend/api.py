@@ -21,6 +21,7 @@ from .skill_registry import (
     list_skills,
     load_skill_metadata,
     set_skill_status,
+    update_skill,
 )
 from .skill_runner import run_skill, stream_skill
 
@@ -88,6 +89,17 @@ class ApproveRequest(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str = ""
+
+
+@app.put("/skills/{skill_id}")
+def update_skill_endpoint(skill_id: str, payload: CreateSkillRequest):
+    """Update an existing skill — bumps version, resets to pending for re-review."""
+    try:
+        return update_skill(skill_id, payload.metadata, payload.skill_md)
+    except SkillNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/skills/{skill_id}/approve")

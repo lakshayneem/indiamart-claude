@@ -98,6 +98,21 @@ def create_skill(metadata: dict, skill_md: str = "") -> dict:
         return {"status": "error", "error": f"Backend unreachable: {e}"}
 
 
+def update_skill(skill_id: str, metadata: dict, skill_md: str = "") -> dict:
+    try:
+        r = requests.put(
+            f"{SANDBOX_URL}/skills/{skill_id}",
+            json={"metadata": metadata, "skill_md": skill_md},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return {"status": "success", "skill": r.json()}
+    except requests.exceptions.HTTPError as e:
+        return {"status": "error", "error": _detail(e)}
+    except Exception as e:
+        return {"status": "error", "error": f"Backend unreachable: {e}"}
+
+
 def approve_skill(skill_id: str) -> dict:
     try:
         r = requests.post(f"{SANDBOX_URL}/skills/{skill_id}/approve", timeout=10)

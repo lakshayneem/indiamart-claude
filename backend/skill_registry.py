@@ -98,6 +98,26 @@ def create_pending_skill(metadata: dict, skill_md: str) -> dict:
     return metadata
 
 
+def update_skill(skill_id: str, metadata: dict, skill_md: str) -> dict:
+    """Update an existing skill. Bumps version, resets status to pending for re-review."""
+    target = _skill_dir(skill_id)
+    if not target.exists():
+        raise SkillNotFoundError(f"Skill '{skill_id}' not found")
+
+    metadata = dict(metadata)
+    metadata["skill_id"] = skill_id
+    metadata["status"] = "pending"
+    metadata["version"] = int(metadata.get("version", 1)) + 1
+    metadata.setdefault("created_at", datetime.now().isoformat())
+    metadata.pop("approved_at", None)
+    metadata.pop("rejection_reason", None)
+
+    _write_metadata(skill_id, metadata)
+    if skill_md:
+        (target / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    return metadata
+
+
 def set_skill_status(skill_id: str, status: str, reason: Optional[str] = None) -> dict:
     if status not in ("approved", "rejected", "pending"):
         raise ValueError(f"invalid status: {status}")
