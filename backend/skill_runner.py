@@ -48,14 +48,10 @@ def _fetch_gitlab_archive(repo_url: str) -> bytes:
     if repo_url.endswith(".git"):
         repo_url = repo_url[:-4]
     parsed = urllib.parse.urlparse(repo_url)
-    if parsed.scheme in ("http", "https"):
-        base = f"{parsed.scheme}://{parsed.netloc}"
-        project_path = parsed.path.lstrip("/")
-    else:
-        base = (os.environ.get("GITLAB_URL") or "").rstrip("/")
-        if not base.startswith(("http://", "https://")):
-            raise RuntimeError("repo_url is a bare path but GITLAB_URL base is missing/invalid")
-        project_path = repo_url.lstrip("/")
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise RuntimeError(f"repo_url must be a full URL (got {repo_url!r})")
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    project_path = parsed.path.lstrip("/")
     if not project_path:
         raise RuntimeError(f"could not extract project path from {repo_url!r}")
     encoded = urllib.parse.quote(project_path, safe="")
