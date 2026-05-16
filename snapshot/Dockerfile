@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DISABLE_AUTOUPDATER=1
 
 RUN apt-get update && apt-get install -y \
-    curl git python3 python3-pip jq unzip \
+    curl git python3 python3-pip jq unzip pandoc \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash daytona
@@ -23,7 +23,7 @@ RUN mkdir -p /home/daytona/skills \
              /home/daytona/workspace \
              /home/daytona/.claude/projects
 
-RUN pip3 install pandas matplotlib requests openpyxl --break-system-packages
+RUN pip3 install pandas matplotlib requests openpyxl python-docx --break-system-packages
 
 COPY CLAUDE.md /home/daytona/CLAUDE.md
 
