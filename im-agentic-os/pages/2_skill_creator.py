@@ -84,43 +84,25 @@ def _render_skill_wizard():
 
     # ── STEP 1: SOURCE ────────────────────────────────────────────────────────
     if step == 1:
-        source_type = st.radio("How will you provide the skill?", ["📁 Upload ZIP folder", "🔗 Git Repo URL"], horizontal=True)
-
-        if "ZIP" in source_type:
-            if editing_id:
-                st.markdown(f'<div class="im-form-helper">Current source: <code>{draft.get("source_ref","(unknown)")}</code> — upload a new ZIP to replace SKILL.md, or skip to keep the existing one.</div>', unsafe_allow_html=True)
-            uploaded = st.file_uploader("Upload your skill folder as a .zip file", type=["zip"])
-            st.markdown('<div class="im-form-helper">Your zip must contain SKILL.md at the root. A scripts/ folder is optional.</div>', unsafe_allow_html=True)
-            if uploaded:
-                if uploaded.size > 50 * 1024 * 1024:
-                    st.error("File exceeds 50MB limit.")
+        if editing_id:
+            st.markdown(f'<div class="im-form-helper">Current source: <code>{draft.get("source_ref","(unknown)")}</code> — upload a new ZIP to replace SKILL.md, or skip to keep the existing one.</div>', unsafe_allow_html=True)
+        uploaded = st.file_uploader("Upload your skill folder as a .zip file", type=["zip"])
+        st.markdown('<div class="im-form-helper">Your zip must contain SKILL.md at the root. A scripts/ folder is optional.</div>', unsafe_allow_html=True)
+        if uploaded:
+            if uploaded.size > 50 * 1024 * 1024:
+                st.error("File exceeds 50MB limit.")
+            else:
+                ok, names, issues, skill_md = validate_zip(uploaded)
+                if ok:
+                    st.success(f"✅ Valid skill folder detected ({len(names)} files)")
+                    with st.expander("View folder contents"):
+                        for n in names: st.code(n)
+                    draft["source_type"] = "zip"
+                    draft["source_ref"] = uploaded.name
+                    draft["skill_md"] = skill_md
                 else:
-                    ok, names, issues, skill_md = validate_zip(uploaded)
-                    if ok:
-                        st.success(f"✅ Valid skill folder detected ({len(names)} files)")
-                        with st.expander("View folder contents"):
-                            for n in names: st.code(n)
-                        draft["source_type"] = "zip"
-                        draft["source_ref"] = uploaded.name
-                        draft["skill_md"] = skill_md
-                    else:
-                        st.error("❌ Validation failed:")
-                        for issue in issues: st.markdown(f"- {issue}")
-        else:
-            repo_url = st.text_input("Git Repo URL", placeholder="https://github.com/org/repo",
-                                     value=draft.get("source_ref","") if draft.get("source_type") == "repo" else "")
-            if repo_url:
-                draft["source_ref"] = repo_url
-                draft["source_type"] = "repo"
-                if st.button("🔍 Validate Repo"):
-                    try:
-                        r = requests.get(repo_url, timeout=5)
-                        if r.status_code < 400:
-                            st.success("✅ Repository is accessible")
-                        else:
-                            st.error("Could not reach this repository. Check the URL or access permissions.")
-                    except:
-                        st.error("Could not reach this repository. Check the URL or access permissions.")
+                    st.error("❌ Validation failed:")
+                    for issue in issues: st.markdown(f"- {issue}")
 
         # In edit mode the source already exists, so allow proceeding without re-uploading
         can_proceed = bool(draft.get("source_ref")) or bool(editing_id)
