@@ -37,7 +37,7 @@ from copy import deepcopy
 from pathlib import Path
 
 PLACEHOLDER = "{{ API_NAME }}"
-TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "srs-srs-template.docx"
+TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "srs-template.docx"
 
 
 def die(code: int, msg: str) -> int:
