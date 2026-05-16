@@ -1,7 +1,9 @@
 import base64
 import json
+import logging
 import os
 import time
+import uuid
 from pathlib import Path
 
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
@@ -11,6 +13,10 @@ from .skill_registry import load_skill_md
 SNAPSHOT = os.environ.get("SNAPSHOT_NAME", "company-claude-v1")
 GLOBAL_CLAUDE_MD = Path(__file__).parent.parent / "snapshot" / "CLAUDE.md"
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+log = logging.getLogger(__name__)
 
 _config = DaytonaConfig(
     api_key=os.environ["DAYTONA_API_KEY"],
@@ -48,7 +54,6 @@ def _parse_cost(raw: str) -> float:
 
 
 def _download_outputs(sandbox) -> dict[str, bytes]:
-    """Download all files from /home/daytona/output/ before sandbox is deleted."""
     try:
         files = sandbox.fs.list_files("/home/daytona/output")
     except Exception:
@@ -68,11 +73,6 @@ def _download_outputs(sandbox) -> dict[str, bytes]:
 
 
 def _pick_main_output(output_files: dict[str, bytes], fallback: str) -> str:
-    """
-    Return the best text output for the frontend.
-    Prefers the first .md file (report.md, review.md, etc.) over assistant narration.
-    Falls back to stream-json assistant text if no .md found.
-    """
     md_files = {k: v for k, v in output_files.items()
                 if k.endswith(".md") and k != "run.log"}
     if md_files:
@@ -80,44 +80,65 @@ def _pick_main_output(output_files: dict[str, bytes], fallback: str) -> str:
     return fallback
 
 
-def run_skill(
+def stream_skill(
     skill_id: str,
     inputs: dict,
     files: dict[str, bytes] | None = None,
-) -> dict:
+):
     """
-    Stateless skill runner: create sandbox → inject CLAUDE.md/SKILL.md → upload user files →
-    run claude -p → download outputs → delete sandbox.
-    Returns {output, output_files, execution_time, cost_usd}.
+    Generator that runs a skill and yields stage events.
+    Every event is also appended to logs/<run_id>.jsonl.
+
+    Stage sequence (happy path):
+        sandbox_creating → sandbox_ready → uploading_skill → files_uploaded
+        → running → downloading → complete
+
+    On any error:
+        → error  (with failed_at and error message)
     """
-    skill_md = load_skill_md(skill_id)
-    task = _format_task(inputs)
+    run_id = str(uuid.uuid4())[:8]
+    log_path = LOG_DIR / f"{run_id}.jsonl"
     files = files or {}
+    current_stage = "init"
 
-    skill_dir_in_sandbox = f"/home/daytona/skills/{skill_id}"
+    def emit(event: dict) -> dict:
+        event = {"run_id": run_id, "ts": time.time(), **event}
+        log.info("[%s] stage=%s %s", run_id, event.get("stage"), event.get("detail", ""))
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+        return event
 
-    daytona = Daytona(_config)
-    sandbox = daytona.create(
-        CreateSandboxFromSnapshotParams(
-            snapshot=SNAPSHOT,
-            env_vars={
-                "ANTHROPIC_BASE_URL": os.environ["ANTHROPIC_BASE_URL"],
-                "ANTHROPIC_AUTH_TOKEN": os.environ["ANTHROPIC_AUTH_TOKEN"],
-                "CLAUDE_SKILL_DIR": skill_dir_in_sandbox,
-            },
-            auto_stop_interval=30,
-        )
-    )
-
+    sandbox = None
     try:
-        # Upload global CLAUDE.md (until next snapshot rebuild bakes it in)
+        current_stage = "sandbox_creating"
+        yield emit({"stage": "sandbox_creating"})
+
+        skill_md = load_skill_md(skill_id)
+        task = _format_task(inputs)
+        skill_dir_in_sandbox = f"/home/daytona/skills/{skill_id}"
+
+        daytona = Daytona(_config)
+        sandbox = daytona.create(
+            CreateSandboxFromSnapshotParams(
+                snapshot=SNAPSHOT,
+                env_vars={
+                    "ANTHROPIC_BASE_URL": os.environ["ANTHROPIC_BASE_URL"],
+                    "ANTHROPIC_AUTH_TOKEN": os.environ["ANTHROPIC_AUTH_TOKEN"],
+                    "CLAUDE_SKILL_DIR": skill_dir_in_sandbox,
+                },
+                auto_stop_interval=30,
+            )
+        )
+        yield emit({"stage": "sandbox_ready", "sandbox_id": sandbox.id})
+
+        current_stage = "uploading_skill"
+        yield emit({"stage": "uploading_skill"})
+
         if GLOBAL_CLAUDE_MD.exists():
             sandbox.fs.upload_file(GLOBAL_CLAUDE_MD.read_bytes(), "/home/daytona/CLAUDE.md")
 
         sandbox.fs.upload_file(skill_md, "/home/daytona/workspace/SKILL.md")
 
-        # Upload skill support files (scripts/, assets/, references/) so skills
-        # that reference ${CLAUDE_SKILL_DIR} find their dependencies in the sandbox.
         skill_local_dir = SKILLS_DIR / skill_id
         for fpath in sorted(skill_local_dir.rglob("*")):
             if fpath.is_file() and fpath.name != "metadata.yaml":
@@ -129,11 +150,13 @@ def run_skill(
 
         uploaded_names: list[str] = []
         for filename, content in files.items():
-            safe_name = Path(filename).name  # strip directories
+            safe_name = Path(filename).name
             if not safe_name:
                 continue
             sandbox.fs.upload_file(content, f"/home/daytona/workspace/{safe_name}")
             uploaded_names.append(safe_name)
+
+        yield emit({"stage": "files_uploaded", "user_files": uploaded_names})
 
         files_note = ""
         if uploaded_names:
@@ -158,16 +181,20 @@ def run_skill(
             f"--verbose"
         )
 
+        current_stage = "running"
+        yield emit({"stage": "running"})
+
         chunks: list[str] = []
         start = time.time()
-
         pty = sandbox.process.create_pty_session(id="skill-run")
         pty.wait_for_connection()
         pty.send_input(cmd + "\nexit\n")
         pty.wait(on_data=lambda data: chunks.append(data.decode(errors="replace")))
-
         elapsed = time.time() - start
         raw = "".join(chunks)
+
+        current_stage = "downloading"
+        yield emit({"stage": "downloading"})
 
         output_files = _download_outputs(sandbox)
         main_output = _pick_main_output(output_files, fallback=_parse_output(raw))
@@ -180,15 +207,35 @@ def run_skill(
             except (UnicodeDecodeError, ValueError):
                 binary_files[fname] = base64.b64encode(content).decode()
 
-        return {
+        yield emit({
+            "stage": "complete",
             "output": main_output,
             "output_files": text_files,
             "output_files_binary": binary_files,
             "execution_time": elapsed,
             "cost_usd": _parse_cost(raw),
-        }
+        })
+
+    except Exception as e:
+        yield emit({"stage": "error", "failed_at": current_stage, "error": str(e)})
+
     finally:
-        try:
-            sandbox.delete()
-        except Exception:
-            pass
+        if sandbox:
+            try:
+                sandbox.delete()
+            except Exception:
+                pass
+
+
+def run_skill(
+    skill_id: str,
+    inputs: dict,
+    files: dict[str, bytes] | None = None,
+) -> dict:
+    """Blocking wrapper around stream_skill — collects all events, returns final result."""
+    for event in stream_skill(skill_id, inputs, files):
+        if event["stage"] == "complete":
+            return {k: v for k, v in event.items() if k not in ("stage", "run_id", "ts")}
+        if event["stage"] == "error":
+            raise RuntimeError(f"[{event.get('failed_at', '?')}] {event['error']}")
+    raise RuntimeError("stream_skill ended without a complete or error event")

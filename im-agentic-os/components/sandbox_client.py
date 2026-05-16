@@ -170,6 +170,38 @@ def run_skill(skill_id: str, inputs: dict, files: dict | None = None) -> dict:
         return _error_result(skill_id, f"Unexpected error: {e}")
 
 
+def stream_skill_run(skill_id: str, inputs: dict, files: dict | None = None):
+    """
+    Generator that streams stage events from /run-skill/stream.
+    Yields dicts: {stage, ...} — same shape as stream_skill on the backend.
+    Falls back to a single error event if the backend is unreachable.
+    """
+    multipart_files = _build_multipart(files or {})
+    try:
+        r = requests.post(
+            f"{SANDBOX_URL}/run-skill/stream",
+            data={"skill_id": skill_id, "inputs": json.dumps(inputs)},
+            files=multipart_files,
+            stream=True,
+            timeout=RUN_TIMEOUT_SECONDS,
+        )
+        r.raise_for_status()
+        for raw_line in r.iter_lines():
+            if raw_line:
+                try:
+                    yield json.loads(raw_line)
+                except json.JSONDecodeError:
+                    pass
+    except requests.exceptions.ConnectionError:
+        yield {"stage": "error", "failed_at": "connection", "error": "Backend offline — start the backend with uvicorn backend.api:app --port 8000"}
+    except requests.exceptions.Timeout:
+        yield {"stage": "error", "failed_at": "running", "error": f"Skill timed out after {RUN_TIMEOUT_SECONDS}s"}
+    except requests.exceptions.HTTPError as e:
+        yield {"stage": "error", "failed_at": "connection", "error": _detail(e)}
+    except Exception as e:
+        yield {"stage": "error", "failed_at": "connection", "error": str(e)}
+
+
 # ── Internal helpers ──────────────────────────────────────────────────────────
 def _build_multipart(files: dict) -> list[tuple]:
     out: list[tuple] = []

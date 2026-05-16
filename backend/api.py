@@ -1,11 +1,15 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import asyncio
 import json
+import logging
+import threading
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -18,7 +22,9 @@ from .skill_registry import (
     load_skill_metadata,
     set_skill_status,
 )
-from .skill_runner import run_skill
+from .skill_runner import run_skill, stream_skill
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 
 app = FastAPI(title="IM Agentic OS — Backend")
 
@@ -109,6 +115,55 @@ def remove_skill(skill_id: str):
 
 
 # ── Skill execution ───────────────────────────────────────────────────────────
+@app.post("/run-skill/stream")
+async def run_skill_stream_endpoint(
+    skill_id: str = Form(...),
+    inputs: str = Form("{}"),
+    files: list[UploadFile] = File(default=[]),
+):
+    """
+    Streaming variant of /run-skill.
+    Returns application/x-ndjson — one JSON object per line, one per stage:
+      sandbox_creating → sandbox_ready → uploading_skill → files_uploaded
+      → running → downloading → complete | error
+    """
+    try:
+        inputs_dict = json.loads(inputs) if inputs else {}
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"inputs must be valid JSON: {e}")
+
+    file_bytes: dict[str, bytes] = {}
+    for f in files or []:
+        if f and f.filename:
+            file_bytes[f.filename] = await f.read()
+
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def _run():
+        try:
+            for event in stream_skill(skill_id, inputs_dict, file_bytes):
+                asyncio.run_coroutine_threadsafe(queue.put(json.dumps(event) + "\n"), loop)
+        except Exception as e:
+            asyncio.run_coroutine_threadsafe(
+                queue.put(json.dumps({"stage": "error", "failed_at": "unknown", "error": str(e)}) + "\n"),
+                loop,
+            )
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put(None), loop)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    async def _generate():
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
+    return StreamingResponse(_generate(), media_type="application/x-ndjson")
+
+
 @app.post("/run-skill")
 async def run_skill_endpoint(
     skill_id: str = Form(...),

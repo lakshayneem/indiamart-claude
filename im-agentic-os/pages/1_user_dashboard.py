@@ -9,7 +9,7 @@ from datetime import datetime
 
 from components.design_system import inject_css, topnav, hero_banner, empty_state, loading_animation, stars
 from components.auth import require_role, get_current_user, logout
-from components.sandbox_client import run_skill, check_sandbox_health
+from components.sandbox_client import run_skill, stream_skill_run, check_sandbox_health
 from components.quota_checker import compute_quota, can_run
 from components.hours_counter import compute_hours_saved, format_hours
 from components.announcement_banner import get_active_announcements, render_banners
@@ -214,10 +214,49 @@ def skill_dialog(sk, username):
             st.error(f"Required: {', '.join(missing)}")
             return
 
-        ph = st.empty()
-        ph.markdown(loading_animation(), unsafe_allow_html=True)
-        result = run_skill(skill_id, collected, files=uploaded_files or None)
-        ph.empty()
+        result = None
+        _stage_labels = {
+            "sandbox_creating": "Creating sandbox…",
+            "sandbox_ready":    "✅ Sandbox ready",
+            "uploading_skill":  "Uploading skill files…",
+            "files_uploaded":   "✅ Files uploaded",
+            "running":          "🤖 Claude is running the skill…",
+            "downloading":      "Downloading outputs…",
+        }
+
+        with st.status("Running skill…", expanded=True) as run_status:
+            for event in stream_skill_run(skill_id, collected, files=uploaded_files or None):
+                stage = event.get("stage")
+                if stage in _stage_labels:
+                    label = _stage_labels[stage]
+                    if stage == "files_uploaded" and event.get("user_files"):
+                        n = len(event["user_files"])
+                        label = f"✅ Files uploaded ({n} user file{'s' if n != 1 else ''})"
+                    st.write(label)
+                elif stage == "complete":
+                    result = {
+                        "status": "success",
+                        "output": event.get("output", ""),
+                        "output_files": event.get("output_files", {}),
+                        "output_files_binary": event.get("output_files_binary", {}),
+                        "execution_time_seconds": event.get("execution_time", 0),
+                        "cost_usd": event.get("cost_usd", 0),
+                        "source": "live",
+                    }
+                    run_status.update(label="✅ Complete", state="complete")
+                elif stage == "error":
+                    result = {
+                        "status": "error",
+                        "error": event.get("error", "Unknown error"),
+                        "execution_time_seconds": 0,
+                    }
+                    run_status.update(
+                        label=f"❌ Failed at: {event.get('failed_at', 'unknown')}",
+                        state="error",
+                    )
+
+        if result is None:
+            result = {"status": "error", "error": "No response from backend", "execution_time_seconds": 0}
 
         log_run(skill_id, username, result["status"], result.get("execution_time_seconds", 0))
 
